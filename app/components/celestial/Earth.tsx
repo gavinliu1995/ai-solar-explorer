@@ -54,7 +54,7 @@ export default function Earth({ active = false, position }: EarthProps) {
             alphaMap={cloudTexture}
             color="#ffffff"
             depthWrite={false}
-            opacity={active ? 0.36 : 0.22}
+            opacity={active ? 0.32 : 0.18}
             transparent
             roughness={0.22}
           />
@@ -67,6 +67,19 @@ export default function Earth({ active = false, position }: EarthProps) {
           blending={AdditiveBlending}
           color="#7dd3fc"
           opacity={active ? 0.055 : 0.032}
+          depthWrite={false}
+          side={BackSide}
+          transparent
+        />
+      </mesh>
+
+      <mesh scale={active ? 1.09 : 1.055}>
+        <sphereGeometry args={[0.88, 48, 48]} />
+        <meshBasicMaterial
+          blending={AdditiveBlending}
+          color="#38bdf8"
+          depthWrite={false}
+          opacity={active ? 0.026 : 0.012}
           side={BackSide}
           transparent
         />

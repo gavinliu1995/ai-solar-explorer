@@ -45,8 +45,20 @@ export default function Saturn({ active = false, position }: SaturnProps) {
         <meshBasicMaterial
           alphaMap={ringTexture}
           color="#e7d7a4"
+          depthWrite={false}
           map={ringTexture}
           opacity={active ? 0.55 : 0.32}
+          side={DoubleSide}
+          transparent
+        />
+      </mesh>
+
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[1.78, 1.88, 192]} />
+        <meshBasicMaterial
+          color="#02040a"
+          depthWrite={false}
+          opacity={active ? 0.34 : 0.18}
           side={DoubleSide}
           transparent
         />
@@ -56,6 +68,7 @@ export default function Saturn({ active = false, position }: SaturnProps) {
         <ringGeometry args={[2.48, 2.62, 192]} />
         <meshBasicMaterial
           color="#a7b6c8"
+          depthWrite={false}
           opacity={active ? 0.18 : 0.1}
           side={DoubleSide}
           transparent
@@ -67,6 +80,7 @@ export default function Saturn({ active = false, position }: SaturnProps) {
         <meshBasicMaterial
           blending={AdditiveBlending}
           color="#f6e6b7"
+          depthWrite={false}
           opacity={active ? 0.09 : 0.035}
           side={BackSide}
           transparent

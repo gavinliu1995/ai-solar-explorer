@@ -39,6 +39,7 @@ export default function Jupiter({ active = false, position }: JupiterProps) {
         <meshBasicMaterial
           blending={AdditiveBlending}
           color="#f8d49a"
+          depthWrite={false}
           opacity={active ? 0.1 : 0.045}
           side={BackSide}
           transparent

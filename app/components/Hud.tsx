@@ -28,6 +28,8 @@ import type {
 import {
   EXPLORATION_DETAILS_LOCALIZED,
   EXPLORATION_LABELS_LOCALIZED,
+  LOCKABLE_TARGETS,
+  MISSION_TARGETS,
   TARGET_LABELS_LOCALIZED,
 } from "@/app/types/space";
 
@@ -79,14 +81,6 @@ type HudProps = {
   setViewMode: (mode: ViewMode) => void;
 };
 
-const TARGET_OPTIONS: SelectedTarget[] = [
-  "earth",
-  "moon",
-  "mars",
-  "jupiter",
-  "saturn",
-];
-
 const BRAND_NAME: Record<Language, string> = {
   en: "ARGONAUT",
   zh: "寰宇星舟",
@@ -95,12 +89,13 @@ const BRAND_NAME: Record<Language, string> = {
 const COPY = {
   en: {
     about:
-      "Argonaut is an independent educational prototype for mission-guided solar system exploration.",
+      "Argonaut is an independent educational prototype for mission-guided solar system exploration. It is not affiliated with or endorsed by NASA.",
     active: "active",
     aiSubtitle: "Guidance channel",
     aiTitle: "Mission Control",
     autoCruise: "Auto Cruise",
     close: "Close",
+    collapseTargets: "Collapse",
     completed: "completed",
     celestialContext: "Celestial Context",
     celestialContextBody:
@@ -117,9 +112,10 @@ const COPY = {
       "Mission control: free exploration is enabled. Use mouse, trackpad, or WASD / arrow keys. Lock the nearest target when ready.",
     hiddenHudButton: "HUD",
     hidePanel: "Hide Panel",
+    expandTargets: "Show Lock Targets",
     info: "Info",
     keyboard:
-      "Keyboard: WASD or arrow keys move in free mode. Shift accelerates, Option slows movement. Double-click a planet to lock it.",
+      "Keyboard: WASD or arrow keys move in free mode. Shift accelerates, Option slows movement. Double-click a visible body to lock it.",
     layersOpened: "Layer controls opened",
     live: "LIVE",
     lockNearest: "Lock",
@@ -132,7 +128,7 @@ const COPY = {
       "Mission Control has prepared a guided exploration sequence for this target.",
     missionComplete: "Mission complete",
     missionProgress: "Mission Progress",
-    missionTargets: "Mission Targets",
+    missionTargets: "Lock Targets",
     missions: "Missions",
     nextMission: "Next Recommended Mission",
     objectBrowser: "Object Browser",
@@ -142,7 +138,7 @@ const COPY = {
     related: "Related",
     resetDone: "Overview restored",
     search: "Search",
-    searchPlaceholder: "Search Earth, Mars, Saturn...",
+    searchPlaceholder: "Search Sun, Moon, Mars, Saturn...",
     settings: "Settings",
     settingsOpened: "Settings opened",
     share: "Share",
@@ -157,7 +153,7 @@ const COPY = {
     simMode: "Simulation Mode",
     solarSystemMode: "Solar System",
     sourceBody:
-      "Visual references may use public NASA/JPL resources or local educational textures. This prototype is not affiliated with or endorsed by NASA.",
+      "Visual references may use public NASA/JPL resources or local educational textures. Argonaut is an independent educational prototype and is not affiliated with or endorsed by NASA.",
     sources: "Sources / Credits",
     speed: "Speed",
     standard: "Standard",
@@ -165,9 +161,12 @@ const COPY = {
     startRecommended: "Start Recommended Mission",
     status: "Status",
     stats: "Stats",
+    targetTrayHint: "Horizontal scroll",
     type: "Type",
     view: "View",
     viewMode: "View Mode",
+    visualMode: "Visual Mode",
+    visualModeBody: "Local textures when available / procedural fallback",
     welcomeBody:
       "Begin with one guided mission. Mission Control will give you three steps, track progress, and write your observations into the Exploration Log.",
     welcomeSkip: "Explore Freely",
@@ -177,12 +176,13 @@ const COPY = {
   },
   zh: {
     about:
-      "寰宇星舟是一个独立教育原型，用于任务引导式太阳系探索，不代表 NASA 背书。",
+      "寰宇星舟是一个独立教育原型，用于任务引导式太阳系探索，不隶属于 NASA，也不代表 NASA 背书。",
     active: "进行中",
     aiSubtitle: "引导频道",
     aiTitle: "Mission Control",
     autoCruise: "自动巡航",
     close: "关闭",
+    collapseTargets: "收起",
     completed: "已完成",
     celestialContext: "Celestial Context",
     celestialContextBody:
@@ -199,9 +199,10 @@ const COPY = {
       "任务控制：自由探索模式已启用。可使用鼠标、触控板或 WASD / 方向键移动，靠近目标后锁定最近星体。",
     hiddenHudButton: "HUD",
     hidePanel: "隐藏面板",
+    expandTargets: "展开锁定目标",
     info: "信息",
     keyboard:
-      "快捷键：自由模式下使用 WASD 或方向键移动，Shift 加速，Option 减速。双击星球可直接锁定。",
+      "快捷键：自由模式下使用 WASD 或方向键移动，Shift 加速，Option 减速。双击可见天体可直接锁定。",
     layersOpened: "图层控制已打开",
     live: "实时",
     lockNearest: "锁定",
@@ -213,7 +214,7 @@ const COPY = {
     missionBoardSubtitle: "Mission Control 已为当前目标准备任务引导序列。",
     missionComplete: "任务完成",
     missionProgress: "任务进度",
-    missionTargets: "任务目标",
+    missionTargets: "锁定目标",
     missions: "任务",
     nextMission: "推荐下一任务",
     objectBrowser: "目标浏览器",
@@ -223,7 +224,7 @@ const COPY = {
     related: "相关对象",
     resetDone: "总览视角已恢复",
     search: "搜索",
-    searchPlaceholder: "搜索 地球、火星、土星...",
+    searchPlaceholder: "搜索 太阳、月球、火星、土星...",
     settings: "设置",
     settingsOpened: "设置面板已打开",
     share: "分享",
@@ -238,7 +239,7 @@ const COPY = {
     simMode: "模拟模式",
     solarSystemMode: "Solar System",
     sourceBody:
-      "视觉参考可能使用 NASA/JPL 公开资源或本地教育纹理。本项目与 NASA 无隶属关系，也不代表 NASA 背书。",
+      "视觉贴图可使用公开 NASA/JPL 资源或本地教育用途贴图。寰宇星舟是独立教育原型，不隶属于 NASA，也不代表 NASA 背书。",
     sources: "来源 / 署名",
     speed: "速度",
     standard: "标准",
@@ -246,9 +247,12 @@ const COPY = {
     startRecommended: "开始推荐任务",
     status: "状态",
     stats: "参数",
+    targetTrayHint: "可横向滑动",
     type: "类型",
     view: "视图",
     viewMode: "视图模式",
+    visualMode: "视觉模式",
+    visualModeBody: "本地贴图优先 / 缺失时程序化回退",
     welcomeBody:
       "先完成一个引导任务。Mission Control 会给你 3 个步骤，记录进度，并把观察结果写入 Exploration Log。",
     welcomeSkip: "先自由探索",
@@ -260,6 +264,12 @@ const COPY = {
 
 const TARGET_SUGGESTIONS: Record<Language, Record<SelectedTarget, string>> = {
   en: {
+    sun:
+      "Recommendation: use the Sun as a light-source anchor, then compare the inner planet orbits around it.",
+    mercury:
+      "Recommendation: inspect Mercury as the innermost rocky reference point near the solar light source.",
+    venus:
+      "Recommendation: observe Venus' cloud deck and compare it with Earth as another terrestrial planet.",
     earth:
       "Recommendation: begin with the Earth-Moon system and inspect the Moon orbit plus atmospheric glow.",
     moon:
@@ -271,6 +281,9 @@ const TARGET_SUGGESTIONS: Record<Language, Record<SelectedTarget, string>> = {
       "Recommendation: approach Saturn's rings and start a ring-system scan.",
   },
   zh: {
+    sun: "建议把太阳作为光源锚点，观察内侧行星轨道围绕它展开的关系。",
+    mercury: "建议观察水星作为最内侧岩质行星的尺度和近太阳光照环境。",
+    venus: "建议观察金星云层，并把它与地球作为类地行星进行对比。",
     earth: "建议从地月系统开始，观察月球轨道和地球大气层。",
     moon: "建议观察月海，并以地球方向作为导航参考。",
     mars: "建议启动火星地貌扫描任务。",
@@ -794,7 +807,7 @@ function SearchOverlay({
   onSelectTarget: (target: SelectedTarget) => void;
 }) {
   const normalizedQuery = query.trim().toLowerCase();
-  const results = TARGET_OPTIONS.filter((target) => {
+  const results = LOCKABLE_TARGETS.filter((target) => {
     const info = SPACE_OBJECTS[target];
     return (
       !normalizedQuery ||
@@ -1548,6 +1561,14 @@ function ViewTab({
           ))}
         </div>
       </div>
+      <div className="border border-white/10 bg-white/[0.03] p-3">
+        <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+          {copy.visualMode}
+        </p>
+        <p className="mt-2 text-xs uppercase tracking-[0.12em] text-cyan-100/80">
+          {copy.visualModeBody}
+        </p>
+      </div>
       {(
         [
           ["orbits", copy.showOrbits],
@@ -1809,37 +1830,72 @@ function MissionTargets({
   setSelectedTarget: (target: SelectedTarget) => void;
 }) {
   const labels = TARGET_LABELS_LOCALIZED[language];
+  const [collapsed, setCollapsed] = useState(false);
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsed(false)}
+        className="pointer-events-auto absolute bottom-28 left-4 flex items-center gap-3 border border-cyan-300/35 bg-black/62 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100 shadow-[0_0_22px_rgba(34,211,238,0.16)] backdrop-blur-xl transition hover:border-cyan-200 active:scale-[0.98]"
+      >
+        <span>{copy.expandTargets}</span>
+        <span className="border-l border-white/10 pl-3 text-slate-400">
+          {labels[selectedTarget]}
+        </span>
+      </button>
+    );
+  }
 
   return (
-    <nav className="pointer-events-auto absolute bottom-28 left-4 w-[min(90vw,540px)] border border-white/10 bg-black/56 p-3 backdrop-blur-xl">
+    <nav className="pointer-events-auto absolute bottom-28 left-4 w-[min(92vw,760px)] border border-white/10 bg-black/56 p-3 backdrop-blur-xl">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">
-          {copy.missionTargets}
-        </p>
-        <span className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">
-          {cameraMode === "free" ? copy.manualNav : simMode}
-        </span>
+        <div className="flex items-center gap-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">
+            {copy.missionTargets}
+          </p>
+          <span className="hidden text-[9px] uppercase tracking-[0.18em] text-slate-600 sm:inline">
+            {copy.targetTrayHint}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">
+            {cameraMode === "free" ? copy.manualNav : simMode}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            className="border border-white/10 bg-white/[0.03] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400 transition hover:border-cyan-300/35 hover:text-cyan-100 active:scale-[0.98]"
+          >
+            {copy.collapseTargets}
+          </button>
+        </div>
       </div>
-      <div className="grid grid-cols-5 gap-2">
-        {TARGET_OPTIONS.map((target) => {
-          const isActive = selectedTarget === target;
+      <div className="-mx-1 overflow-x-auto pb-1">
+        <div className="flex min-w-max gap-2 px-1">
+          {LOCKABLE_TARGETS.map((target) => {
+            const isActive = selectedTarget === target;
+            const hasMissions = MISSION_TARGETS.includes(target);
 
-          return (
-            <button
-              key={target}
-              type="button"
-              onClick={() => setSelectedTarget(target)}
-              className={[
-                "border px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] transition active:scale-[0.98]",
-                isActive
-                  ? "border-cyan-300 bg-cyan-950/40 text-cyan-100 shadow-[0_0_20px_rgba(34,211,238,0.22)]"
-                  : "border-white/10 bg-white/[0.03] text-slate-400 hover:border-cyan-300/35 hover:text-slate-100",
-              ].join(" ")}
-            >
-              {labels[target]}
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={target}
+                type="button"
+                onClick={() => setSelectedTarget(target)}
+                className={[
+                  "h-12 min-w-32 border px-3 text-[10px] font-semibold uppercase tracking-[0.14em] transition active:scale-[0.98]",
+                  isActive
+                    ? "border-cyan-300 bg-cyan-950/40 text-cyan-100 shadow-[0_0_20px_rgba(34,211,238,0.22)]"
+                    : hasMissions
+                      ? "border-white/10 bg-white/[0.03] text-slate-400 hover:border-cyan-300/35 hover:text-slate-100"
+                      : "border-white/10 bg-white/[0.02] text-slate-500 hover:border-cyan-300/30 hover:text-slate-200",
+                ].join(" ")}
+              >
+                {labels[target]}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );

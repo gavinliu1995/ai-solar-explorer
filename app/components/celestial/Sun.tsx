@@ -52,7 +52,8 @@ export default function Sun() {
           <meshBasicMaterial
             blending={AdditiveBlending}
             color={index % 2 === 0 ? "#ffb703" : "#ff7b00"}
-            opacity={0.12}
+            depthWrite={false}
+            opacity={0.09}
             transparent
           />
         </mesh>
@@ -63,7 +64,8 @@ export default function Sun() {
         <meshBasicMaterial
           blending={AdditiveBlending}
           color="#ffd166"
-          opacity={0.13}
+          depthWrite={false}
+          opacity={0.1}
           side={BackSide}
           transparent
         />
@@ -74,7 +76,8 @@ export default function Sun() {
         <meshBasicMaterial
           blending={AdditiveBlending}
           color="#ff9f1c"
-          opacity={0.07}
+          depthWrite={false}
+          opacity={0.052}
           side={BackSide}
           transparent
         />
@@ -85,7 +88,8 @@ export default function Sun() {
         <meshBasicMaterial
           blending={AdditiveBlending}
           color="#ff8f00"
-          opacity={0.032}
+          depthWrite={false}
+          opacity={0.02}
           side={BackSide}
           transparent
         />
@@ -110,7 +114,8 @@ export default function Sun() {
             <meshBasicMaterial
               blending={AdditiveBlending}
               color="#ffcf70"
-              opacity={0.08}
+              depthWrite={false}
+              opacity={0.055}
               transparent
             />
           </mesh>

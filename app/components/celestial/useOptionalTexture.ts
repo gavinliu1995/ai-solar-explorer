@@ -20,28 +20,55 @@ export function useOptionalTexture(path: string) {
     }
 
     let isMounted = true;
-    const loader = new TextureLoader();
-    const loadedTexture = loader.load(
-      path,
-      (nextTexture) => {
-        nextTexture.colorSpace = SRGBColorSpace;
-        nextTexture.minFilter = LinearFilter;
-        nextTexture.magFilter = LinearFilter;
-        nextTexture.wrapS = ClampToEdgeWrapping;
-        nextTexture.wrapT = ClampToEdgeWrapping;
-        nextTexture.needsUpdate = true;
+    let loadedTexture: Texture | null = null;
+    const controller = new AbortController();
 
-        if (isMounted) setTexture(nextTexture);
-      },
-      undefined,
-      () => {
+    async function loadTextureIfAvailable() {
+      try {
+        const response = await fetch(path, {
+          method: "HEAD",
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          if (isMounted) setTexture(null);
+          return;
+        }
+      } catch {
         if (isMounted) setTexture(null);
-      },
-    );
+        return;
+      }
+
+      if (!isMounted) return;
+
+      const loader = new TextureLoader();
+      loadedTexture = loader.load(
+        path,
+        (nextTexture) => {
+          if (!isMounted) return;
+
+          nextTexture.colorSpace = SRGBColorSpace;
+          nextTexture.minFilter = LinearFilter;
+          nextTexture.magFilter = LinearFilter;
+          nextTexture.wrapS = ClampToEdgeWrapping;
+          nextTexture.wrapT = ClampToEdgeWrapping;
+          nextTexture.needsUpdate = true;
+
+          setTexture(nextTexture);
+        },
+        undefined,
+        () => {
+          if (isMounted) setTexture(null);
+        },
+      );
+    }
+
+    void loadTextureIfAvailable();
 
     return () => {
       isMounted = false;
-      loadedTexture.dispose();
+      controller.abort();
+      loadedTexture?.dispose();
     };
   }, [path]);
 

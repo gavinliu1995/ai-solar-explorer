@@ -65,6 +65,7 @@ export default function Mars({
         <meshBasicMaterial
           blending={AdditiveBlending}
           color="#fb7185"
+          depthWrite={false}
           opacity={active ? 0.16 : 0.035}
           side={BackSide}
           transparent

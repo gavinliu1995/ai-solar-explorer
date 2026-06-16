@@ -17,6 +17,72 @@ export type SpaceObjectInfo = {
 };
 
 export const SPACE_OBJECTS: Record<SpaceTarget, SpaceObjectInfo> = {
+  sun: {
+    name: { en: "Sun", zh: "太阳" },
+    type: { en: "Star", zh: "恒星" },
+    shortDescription: {
+      en: "The Sun is the central star of the solar system and the dominant light source for every planetary view.",
+      zh: "太阳是太阳系中心恒星，也是所有行星视图中的主光源。",
+    },
+    detailDescription: {
+      en: "The Sun anchors the solar system by mass and gravity. In Argonaut, locking the Sun helps you read the inner planetary orbits, light direction, corona glow, and the compressed scale of the orbital map.",
+      zh: "太阳以质量和引力锚定整个太阳系。在寰宇星舟中锁定太阳，可以观察内侧行星轨道、光照方向、日冕辉光和压缩展示尺度。",
+    },
+    stats: {
+      diameter: "1.39 million km",
+      distanceFromSun: "0 AU",
+      orbitalPeriod: "Solar system center",
+      notableFeatures: ["Photosphere", "Corona", "Solar wind"],
+    },
+    related: {
+      en: ["Mercury", "Venus", "Solar Corona"],
+      zh: ["水星", "金星", "日冕"],
+    },
+  },
+  mercury: {
+    name: { en: "Mercury", zh: "水星" },
+    type: { en: "Planet", zh: "行星" },
+    shortDescription: {
+      en: "Mercury is the innermost planet, a small cratered world close to the Sun.",
+      zh: "水星是最靠近太阳的行星，体积较小，表面布满撞击坑。",
+    },
+    detailDescription: {
+      en: "Mercury provides a compact reference for the inner solar system. Its cratered surface and proximity to the Sun make it useful for understanding illumination, scale, and orbital spacing.",
+      zh: "水星是理解内太阳系的紧凑参考点。它的撞击坑表面和近太阳位置，有助于观察光照、尺度和内侧轨道间距。",
+    },
+    stats: {
+      diameter: "4,879 km",
+      distanceFromSun: "0.39 AU",
+      orbitalPeriod: "88 Earth days",
+      notableFeatures: ["Cratered surface", "Extreme temperatures", "Inner orbit"],
+    },
+    related: {
+      en: ["Sun", "Caloris Basin", "Inner Solar System"],
+      zh: ["太阳", "卡洛里斯盆地", "内太阳系"],
+    },
+  },
+  venus: {
+    name: { en: "Venus", zh: "金星" },
+    type: { en: "Planet", zh: "行星" },
+    shortDescription: {
+      en: "Venus is a cloud-covered terrestrial planet with a dense atmosphere.",
+      zh: "金星是一颗被厚云层包裹的类地行星，拥有浓密大气。",
+    },
+    detailDescription: {
+      en: "Venus is close to Earth in size but radically different in atmosphere and surface conditions. In this prototype, it helps compare terrestrial planets and read the bright inner solar system.",
+      zh: "金星与地球尺寸接近，但大气和表面环境截然不同。在本原型中，它适合用于对比类地行星，并观察明亮的内太阳系区域。",
+    },
+    stats: {
+      diameter: "12,104 km",
+      distanceFromSun: "0.72 AU",
+      orbitalPeriod: "225 Earth days",
+      notableFeatures: ["Dense atmosphere", "Global cloud deck", "Greenhouse heating"],
+    },
+    related: {
+      en: ["Sun", "Cloud Deck", "Terrestrial Planets"],
+      zh: ["太阳", "云层", "类地行星"],
+    },
+  },
   earth: {
     name: { en: "Earth", zh: "地球" },
     type: { en: "Planet", zh: "行星" },

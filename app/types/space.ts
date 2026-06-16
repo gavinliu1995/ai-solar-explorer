@@ -1,4 +1,12 @@
-export type SpaceTarget = "earth" | "moon" | "mars" | "jupiter" | "saturn";
+export type SpaceTarget =
+  | "sun"
+  | "mercury"
+  | "venus"
+  | "earth"
+  | "moon"
+  | "mars"
+  | "jupiter"
+  | "saturn";
 
 export type SelectedTarget = SpaceTarget;
 
@@ -19,6 +27,25 @@ export type ControlSensitivity = "low" | "normal" | "high";
 export type ActivePanel = "info" | "missions" | "view";
 
 export type ViewMode = "solar-system" | "celestial-sphere";
+
+export const LOCKABLE_TARGETS: SpaceTarget[] = [
+  "sun",
+  "mercury",
+  "venus",
+  "earth",
+  "moon",
+  "mars",
+  "jupiter",
+  "saturn",
+];
+
+export const MISSION_TARGETS: SpaceTarget[] = [
+  "earth",
+  "moon",
+  "mars",
+  "jupiter",
+  "saturn",
+];
 
 export type ViewLayerState = {
   constellations: boolean;
@@ -87,10 +114,13 @@ export type TargetMetadata = {
   description: string;
   label: string;
   related: string[];
-  type: "Planet" | "Moon" | "Gas Giant" | "Ringed Planet";
+  type: "Star" | "Planet" | "Moon" | "Gas Giant" | "Ringed Planet";
 };
 
 export const TARGET_LABELS: Record<SelectedTarget, string> = {
+  sun: "Sun",
+  mercury: "Mercury",
+  venus: "Venus",
   earth: "Earth",
   moon: "Moon",
   mars: "Mars",
@@ -104,6 +134,9 @@ export const TARGET_LABELS_LOCALIZED: Record<
 > = {
   en: TARGET_LABELS,
   zh: {
+    sun: "太阳",
+    mercury: "水星",
+    venus: "金星",
     earth: "地球",
     moon: "月球",
     mars: "火星",
@@ -117,12 +150,14 @@ export const TARGET_TYPE_LABELS_LOCALIZED: Record<
   Record<TargetMetadata["type"], string>
 > = {
   en: {
+    Star: "Star",
     Planet: "Planet",
     Moon: "Moon",
     "Gas Giant": "Gas Giant",
     "Ringed Planet": "Ringed Planet",
   },
   zh: {
+    Star: "恒星",
     Planet: "行星",
     Moon: "卫星",
     "Gas Giant": "气态巨行星",
@@ -135,6 +170,12 @@ export const TARGET_DESCRIPTIONS_LOCALIZED: Record<
   Record<SelectedTarget, string>
 > = {
   en: {
+    sun:
+      "The Sun is the central star of the solar system and the primary light source for every planetary view.",
+    mercury:
+      "Mercury is the innermost planet, a small cratered world exposed to extreme solar heating.",
+    venus:
+      "Venus is a cloud-covered terrestrial planet with a dense atmosphere and intense greenhouse conditions.",
     earth:
       "Earth is our home world, the only known planet with life and liquid water on its surface.",
     moon:
@@ -146,6 +187,9 @@ export const TARGET_DESCRIPTIONS_LOCALIZED: Record<
     saturn: "Saturn is famous for its spectacular ring system and icy moons.",
   },
   zh: {
+    sun: "太阳是太阳系中心恒星，也是所有行星视图中的主要光源。",
+    mercury: "水星是最靠近太阳的行星，体积较小，表面布满撞击坑并承受强烈太阳辐照。",
+    venus: "金星是一颗被厚云层包裹的类地行星，拥有浓密大气和强烈温室效应。",
     earth: "地球是我们的家园，是目前已知唯一拥有生命并在表面存在液态水的行星。",
     moon: "月球是地球的天然卫星，也是人类首次到访的地外天体。",
     mars: "火星是一颗寒冷的沙漠行星，也是人类未来最重要的深空探索目标之一。",
@@ -159,6 +203,9 @@ export const TARGET_RELATED_LOCALIZED: Record<
   Record<SelectedTarget, string[]>
 > = {
   en: {
+    sun: ["Mercury", "Venus", "Solar Corona"],
+    mercury: ["Sun", "Caloris Basin", "Inner Solar System"],
+    venus: ["Sun", "Cloud Deck", "Terrestrial Planets"],
     earth: ["Moon", "ISS", "Near Earth Objects"],
     moon: ["Apollo Site", "Mare Tranquillitatis", "Far Side"],
     mars: ["Olympus Mons", "Valles Marineris", "Jezero Crater", "Polar Caps"],
@@ -166,6 +213,9 @@ export const TARGET_RELATED_LOCALIZED: Record<
     saturn: ["Ring System", "Titan", "Icy Moons"],
   },
   zh: {
+    sun: ["水星", "金星", "日冕"],
+    mercury: ["太阳", "卡洛里斯盆地", "内太阳系"],
+    venus: ["太阳", "云层", "类地行星"],
     earth: ["月球", "国际空间站", "近地天体"],
     moon: ["阿波罗登陆点", "静海", "月球背面"],
     mars: ["奥林帕斯山", "水手峡谷", "杰泽罗陨石坑", "火星极冠"],
@@ -175,6 +225,30 @@ export const TARGET_RELATED_LOCALIZED: Record<
 };
 
 export const TARGET_METADATA: Record<SelectedTarget, TargetMetadata> = {
+  sun: {
+    assistant: "任务控制：太阳已锁定。请注意当前目标是恒星光源，适合观察日冕、光照方向和内太阳系尺度。",
+    description:
+      "The Sun is the central star of the solar system and the primary light source for every planetary view.",
+    label: "Sun",
+    related: ["Mercury", "Venus", "Solar Corona"],
+    type: "Star",
+  },
+  mercury: {
+    assistant: "任务控制：水星已锁定。该目标适合观察内太阳系尺度、强光照环境和类月球撞击地貌。",
+    description:
+      "Mercury is the innermost planet, a small cratered world exposed to extreme solar heating.",
+    label: "Mercury",
+    related: ["Sun", "Caloris Basin", "Inner Solar System"],
+    type: "Planet",
+  },
+  venus: {
+    assistant: "任务控制：金星已锁定。当前视图适合观察厚云层、类地行星尺度和内太阳系轨道关系。",
+    description:
+      "Venus is a cloud-covered terrestrial planet with a dense atmosphere and intense greenhouse conditions.",
+    label: "Venus",
+    related: ["Sun", "Cloud Deck", "Terrestrial Planets"],
+    type: "Planet",
+  },
   earth: {
     assistant: "任务控制：地球轨道锁定。当前视图显示地月系统、近地空间层和主要导航参考线。",
     description:
@@ -278,6 +352,9 @@ export const EXPLORATION_ASSISTANT: Record<MarsExplorationPoint, string> = {
 };
 
 export const TARGET_POSITIONS: Record<SelectedTarget, [number, number, number]> = {
+  sun: [0, 0, 0],
+  mercury: [3.6, 0, 0.62],
+  venus: [5.8, 0, -0.92],
   earth: [8.8, 0, 0.6],
   moon: [10.55, 0.18, -0.2],
   mars: [15.2, -0.08, -3.35],

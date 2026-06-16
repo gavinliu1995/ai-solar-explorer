@@ -16,16 +16,15 @@ import {
   Float32BufferAttribute,
   Vector3,
 } from "three";
-import type { Camera, Mesh, Texture } from "three";
+import type { Camera } from "three";
 import Earth from "./celestial/Earth";
 import Jupiter from "./celestial/Jupiter";
 import Mars from "./celestial/Mars";
+import Mercury from "./celestial/Mercury";
 import Moon from "./celestial/Moon";
 import Saturn from "./celestial/Saturn";
 import Sun from "./celestial/Sun";
 import Venus from "./celestial/Venus";
-import { createMercuryTexture } from "./celestial/textureUtils";
-import { useOptionalTexture } from "./celestial/useOptionalTexture";
 import ConstellationLayer from "./scene/ConstellationLayer";
 import EclipticBand from "./scene/EclipticBand";
 import OrbitLine from "./scene/OrbitLine";
@@ -44,7 +43,11 @@ import type {
   ViewLayerState,
   ViewMode,
 } from "@/app/types/space";
-import { TARGET_LABELS_LOCALIZED, TARGET_POSITIONS } from "@/app/types/space";
+import {
+  LOCKABLE_TARGETS,
+  TARGET_LABELS_LOCALIZED,
+  TARGET_POSITIONS,
+} from "@/app/types/space";
 
 type SolarSystemSceneProps = {
   cameraCommand: CameraCommand;
@@ -72,21 +75,13 @@ type OrbitSpec = {
   target?: SelectedTarget;
 };
 
-const SELECTABLE_TARGETS: SelectedTarget[] = [
-  "earth",
-  "moon",
-  "mars",
-  "jupiter",
-  "saturn",
-];
-
 const MERCURY_POSITION: [number, number, number] = [3.6, 0, 0.62];
 const VENUS_POSITION: [number, number, number] = [5.8, 0, -0.92];
 const INITIAL_EARTH_CAMERA_POSITION: [number, number, number] = [7.25, 1.42, 4.18];
 
 const ORBITS: OrbitSpec[] = [
-  { color: "#8b8fa3", opacity: 0.052, radiusX: 3.7, radiusZ: 3.25, rotationY: 0.08 },
-  { color: "#eabf73", opacity: 0.06, radiusX: 5.95, radiusZ: 5.25, rotationY: -0.1 },
+  { color: "#8b8fa3", opacity: 0.052, radiusX: 3.7, radiusZ: 3.25, rotationY: 0.08, target: "mercury" },
+  { color: "#eabf73", opacity: 0.06, radiusX: 5.95, radiusZ: 5.25, rotationY: -0.1, target: "venus" },
   { color: "#38bdf8", opacity: 0.08, radiusX: 8.85, radiusZ: 7.95, rotationY: 0.04, target: "earth" },
   { color: "#fb923c", opacity: 0.06, radiusX: 15.55, radiusZ: 13.7, rotationY: -0.16, target: "mars" },
   { color: "#94a3b8", opacity: 0.052, radiusX: 21.65, radiusZ: 18.75, rotationY: 0.16, target: "jupiter" },
@@ -94,6 +89,9 @@ const ORBITS: OrbitSpec[] = [
 ];
 
 const CAMERA_OFFSETS: Record<SelectedTarget, Vector3> = {
+  sun: new Vector3(2.2, 2.6, 6.4),
+  mercury: new Vector3(0.55, 0.72, 1.58),
+  venus: new Vector3(0.72, 1.0, 2.15),
   earth: new Vector3(-1.55, 1.42, 3.58),
   moon: new Vector3(1.05, 1.04, 2.3),
   mars: new Vector3(1.25, 2.8, 5.25),
@@ -102,6 +100,9 @@ const CAMERA_OFFSETS: Record<SelectedTarget, Vector3> = {
 };
 
 const TARGET_RADII: Record<SelectedTarget, number> = {
+  sun: 1.45,
+  mercury: 0.24,
+  venus: 0.42,
   earth: 1.2,
   moon: 0.31,
   mars: 0.72,
@@ -270,7 +271,7 @@ function SolarMap({
   const orbitOpacityScale = viewMode === "celestial-sphere" ? 0.56 : 1;
   const targetDoubleClickHandlers = useMemo(
     () =>
-      SELECTABLE_TARGETS.reduce(
+      LOCKABLE_TARGETS.reduce(
         (handlers, target) => {
           handlers[target] = (event: ThreeEvent<MouseEvent>) => {
             event.stopPropagation();
@@ -313,36 +314,53 @@ function SolarMap({
         </group>
       ) : null}
 
-      <group scale={0.72}>
+      <group
+        onDoubleClick={targetDoubleClickHandlers.sun}
+        scale={selectedTarget === "sun" ? 0.82 : 0.72}
+      >
         <Sun />
       </group>
       {viewLayers.labels ? (
-        <SpaceLabel muted position={[0, 2.85, 0]}>
-          {language === "zh" ? "太阳" : "SUN"}
+        <SpaceLabel
+          active={selectedTarget === "sun"}
+          muted={selectedTarget !== "sun"}
+          position={[0, 2.85, 0]}
+        >
+          {labels.sun}
         </SpaceLabel>
       ) : null}
 
-      <SimplePlanet
-        color="#8a8f9b"
-        emissive="#171923"
-        fallbackTextureFactory={createMercuryTexture}
+      <group
+        onDoubleClick={targetDoubleClickHandlers.mercury}
         position={MERCURY_POSITION}
-        radius={0.22}
-        rotationSpeed={0.18}
-        texturePath="/textures/planets/mercury.jpg"
-      />
+        scale={selectedTarget === "mercury" ? 1.22 : 1}
+      >
+        <Mercury position={[0, 0, 0]} />
+      </group>
       {viewLayers.labels ? (
-        <SpaceLabel muted position={[MERCURY_POSITION[0], 0.82, MERCURY_POSITION[2]]}>
-          {language === "zh" ? "水星" : "MERCURY"}
+        <SpaceLabel
+          active={selectedTarget === "mercury"}
+          muted={selectedTarget !== "mercury"}
+          position={[MERCURY_POSITION[0], 0.82, MERCURY_POSITION[2]]}
+        >
+          {labels.mercury}
         </SpaceLabel>
       ) : null}
 
-      <group position={VENUS_POSITION} scale={0.72}>
+      <group
+        onDoubleClick={targetDoubleClickHandlers.venus}
+        position={VENUS_POSITION}
+        scale={selectedTarget === "venus" ? 0.9 : 0.72}
+      >
         <Venus position={[0, 0, 0]} />
       </group>
       {viewLayers.labels ? (
-        <SpaceLabel muted position={[VENUS_POSITION[0], 1.05, VENUS_POSITION[2]]}>
-          {language === "zh" ? "金星" : "VENUS"}
+        <SpaceLabel
+          active={selectedTarget === "venus"}
+          muted={selectedTarget !== "venus"}
+          position={[VENUS_POSITION[0], 1.05, VENUS_POSITION[2]]}
+        >
+          {labels.venus}
         </SpaceLabel>
       ) : null}
 
@@ -454,49 +472,6 @@ function ProbeLayer() {
       <ProbeMarker color="#c4b5fd" label="Lucy" position={[16.4, 0.7, -5.5]} />
       <ProbeMarker color="#bfdbfe" label="Juno" position={[18.15, 1.04, 2.1]} />
     </group>
-  );
-}
-
-function SimplePlanet({
-  color,
-  emissive,
-  fallbackTextureFactory,
-  position,
-  radius,
-  rotationSpeed,
-  texturePath,
-}: {
-  color: string;
-  emissive: string;
-  fallbackTextureFactory?: () => Texture;
-  position: [number, number, number];
-  radius: number;
-  rotationSpeed: number;
-  texturePath?: string;
-}) {
-  const meshRef = useRef<Mesh>(null);
-  const fallbackTexture = useMemo(
-    () => (fallbackTextureFactory ? fallbackTextureFactory() : null),
-    [fallbackTextureFactory],
-  );
-  const localTexture = useOptionalTexture(texturePath ?? "");
-  const surfaceTexture = localTexture ?? fallbackTexture;
-
-  useFrame((_, delta) => {
-    if (meshRef.current) meshRef.current.rotation.y += delta * rotationSpeed;
-  });
-
-  return (
-    <mesh ref={meshRef} position={position}>
-      <sphereGeometry args={[radius, 40, 40]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={emissive}
-        emissiveIntensity={0.1}
-        map={surfaceTexture ?? undefined}
-        roughness={0.82}
-      />
-    </mesh>
   );
 }
 
@@ -746,7 +721,7 @@ function getNearestTarget(position: Vector3) {
   let nearestTarget: SelectedTarget = "earth";
   let nearestDistance = Number.POSITIVE_INFINITY;
 
-  SELECTABLE_TARGETS.forEach((target) => {
+  LOCKABLE_TARGETS.forEach((target) => {
     const [x, y, z] = TARGET_POSITIONS[target];
     const distance = position.distanceTo(new Vector3(x, y, z));
 
@@ -813,6 +788,9 @@ function applyZoomCommand({
 }
 
 function getCloseCameraScale(target: SelectedTarget) {
+  if (target === "sun") return 0.72;
+  if (target === "mercury") return 0.52;
+  if (target === "venus") return 0.58;
   if (target === "moon") return 0.58;
   if (target === "jupiter") return 0.62;
   if (target === "saturn") return 0.7;
@@ -874,6 +852,9 @@ function applyFreeKeyboardMovement({
 function getMinCameraDistance(target: SelectedTarget) {
   const radiusDistance = TARGET_RADII[target] * 2.2;
 
+  if (target === "sun") return Math.max(radiusDistance, 3.2);
+  if (target === "mercury") return Math.max(radiusDistance, 0.58);
+  if (target === "venus") return Math.max(radiusDistance, 0.95);
   if (target === "moon") return Math.max(radiusDistance, 0.82);
   if (target === "saturn") return Math.max(radiusDistance, 5.4);
 

@@ -2,6 +2,7 @@
 
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
+import { AdditiveBlending, BackSide } from "three";
 import type { Mesh } from "three";
 import { createVenusTexture } from "./textureUtils";
 import { useOptionalTexture } from "./useOptionalTexture";
@@ -21,14 +22,28 @@ export default function Venus({ position }: VenusProps) {
   });
 
   return (
-    <mesh ref={meshRef} position={position}>
-      <sphereGeometry args={[0.55, 48, 48]} />
-      <meshStandardMaterial
-        emissive="#2f2114"
-        emissiveIntensity={0.05}
-        map={surfaceTexture}
-        roughness={0.88}
-      />
-    </mesh>
+    <group position={position}>
+      <mesh ref={meshRef}>
+        <sphereGeometry args={[0.55, 48, 48]} />
+        <meshStandardMaterial
+          emissive="#2f2114"
+          emissiveIntensity={0.05}
+          map={surfaceTexture}
+          roughness={0.88}
+        />
+      </mesh>
+
+      <mesh scale={1.055}>
+        <sphereGeometry args={[0.55, 40, 40]} />
+        <meshBasicMaterial
+          blending={AdditiveBlending}
+          color="#f6d58d"
+          depthWrite={false}
+          opacity={0.035}
+          side={BackSide}
+          transparent
+        />
+      </mesh>
+    </group>
   );
 }

@@ -364,20 +364,11 @@ export default function Home() {
 
   function handleRelatedItem(item: string) {
     const normalizedItem = item.toLowerCase();
-    const relatedTarget = ([
-      "earth",
-      "moon",
-      "mars",
-      "jupiter",
-      "saturn",
-    ] as SelectedTarget[]).find((target) => normalizedItem.includes(target));
-    const localizedRelatedTarget = ([
-      "earth",
-      "moon",
-      "mars",
-      "jupiter",
-      "saturn",
-    ] as SelectedTarget[]).find(
+    const lockableTargets = Object.keys(SPACE_OBJECTS) as SelectedTarget[];
+    const relatedTarget = lockableTargets.find((target) =>
+      normalizedItem.includes(target),
+    );
+    const localizedRelatedTarget = lockableTargets.find(
       (target) =>
         SPACE_OBJECTS[target].name.zh === item ||
         SPACE_OBJECTS[target].name.en.toLowerCase() === normalizedItem,
