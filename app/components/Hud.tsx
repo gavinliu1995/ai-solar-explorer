@@ -1,17 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { getMissionById, getMissionsForTarget } from "@/app/data/missions";
+import {
+  getMissionById,
+  getMissionSteps,
+  getMissionsForTarget,
+  getRecommendedMission,
+} from "@/app/data/missions";
 import { SPACE_OBJECTS } from "@/app/data/spaceObjects";
 import type {
   ActivePanel,
   CameraCommandType,
   CameraMode,
   ControlSensitivity,
+  ExplorationLogEntry,
   ExplorationPoint,
   HudMode,
   Language,
   Mission,
+  MissionStep,
   MissionStatus,
   SelectedTarget,
   SimMode,
@@ -29,10 +36,12 @@ type HudProps = {
   completedMissionIds: string[];
   controlSensitivity: ControlSensitivity;
   detailOpen: boolean;
+  explorationLog: ExplorationLogEntry[];
   explorationPoint: ExplorationPoint;
   hudMode: HudMode;
   language: Language;
   menuOpen: boolean;
+  missionStepIndex: number;
   nearestTarget: SelectedTarget;
   searchOpen: boolean;
   selectedMissionId: string | null;
@@ -40,13 +49,17 @@ type HudProps = {
   shareToast: string | null;
   simMode: SimMode;
   viewLayers: ViewLayerState;
+  welcomeOpen: boolean;
+  onAdvanceMissionStep: () => void;
   onCameraCommand: (command: CameraCommandType) => void;
   onCompleteMission: (missionId: string) => void;
+  onDismissWelcome: () => void;
   onOpenViewPanel: () => void;
   onRelatedItem: (item: string) => void;
   onSelectSearchTarget: (target: SelectedTarget) => void;
   onShareView: () => void;
   onStartMission: (mission: Mission) => void;
+  onStartRecommendedMission: () => void;
   onToast: (message: string) => void;
   onToggleCameraMode: () => void;
   onToggleFullscreen: () => void;
@@ -81,8 +94,8 @@ const COPY = {
     about:
       "Argonaut is an independent educational prototype for mission-guided solar system exploration.",
     active: "active",
-    aiSubtitle: "Task context",
-    aiTitle: "Mission Control AI",
+    aiSubtitle: "Guidance channel",
+    aiTitle: "Mission Control",
     autoCruise: "Auto Cruise",
     close: "Close",
     completed: "completed",
@@ -105,12 +118,14 @@ const COPY = {
     menu: "Menu",
     missionActiveInstruction:
       "Adjust the view and inspect the target region. When finished, mark the mission complete in Mission Board.",
-    missionBoard: "AI Mission Board",
+    missionBoard: "Mission Board",
     missionBoardSubtitle:
-      "The onboard assistant has generated exploration tasks for this target.",
+      "Mission Control has prepared a guided exploration sequence for this target.",
     missionComplete: "Mission complete",
+    missionProgress: "Mission Progress",
     missionTargets: "Mission Targets",
     missions: "Missions",
+    nextMission: "Next Recommended Mission",
     objectBrowser: "Object Browser",
     paused: "Paused",
     readMore: "Read More",
@@ -133,17 +148,24 @@ const COPY = {
     speed: "Speed",
     standard: "Standard",
     start: "Start Mission",
+    startRecommended: "Start Recommended Mission",
     status: "Status",
     stats: "Stats",
     type: "Type",
     view: "View",
+    welcomeBody:
+      "Begin with one guided mission. Mission Control will give you three steps, track progress, and write your observations into the Exploration Log.",
+    welcomeSkip: "Explore Freely",
+    welcomeTitle: "Welcome aboard",
+    explorationLog: "Exploration Log",
+    noLog: "No mission events yet.",
   },
   zh: {
     about:
       "寰宇星舟是一个独立教育原型，用于任务引导式太阳系探索，不代表 NASA 背书。",
     active: "进行中",
-    aiSubtitle: "任务上下文",
-    aiTitle: "任务控制 AI",
+    aiSubtitle: "引导频道",
+    aiTitle: "Mission Control",
     autoCruise: "自动巡航",
     close: "关闭",
     completed: "已完成",
@@ -166,11 +188,13 @@ const COPY = {
     menu: "菜单",
     missionActiveInstruction:
       "请调整视角并观察目标区域。完成后在 Mission Board 中点击 Complete 标记任务完成。",
-    missionBoard: "AI Mission Board",
-    missionBoardSubtitle: "舰载助手已为当前目标生成探索任务。",
+    missionBoard: "Mission Board",
+    missionBoardSubtitle: "Mission Control 已为当前目标准备任务引导序列。",
     missionComplete: "任务完成",
+    missionProgress: "任务进度",
     missionTargets: "任务目标",
     missions: "任务",
+    nextMission: "推荐下一任务",
     objectBrowser: "目标浏览器",
     paused: "暂停",
     readMore: "查看详情",
@@ -193,10 +217,17 @@ const COPY = {
     speed: "速度",
     standard: "标准",
     start: "Start Mission",
+    startRecommended: "开始推荐任务",
     status: "状态",
     stats: "参数",
     type: "类型",
     view: "视图",
+    welcomeBody:
+      "先完成一个引导任务。Mission Control 会给你 3 个步骤，记录进度，并把观察结果写入 Exploration Log。",
+    welcomeSkip: "先自由探索",
+    welcomeTitle: "欢迎登舰",
+    explorationLog: "Exploration Log",
+    noLog: "暂无任务记录。",
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -227,10 +258,12 @@ export default function Hud({
   completedMissionIds,
   controlSensitivity,
   detailOpen,
+  explorationLog,
   explorationPoint,
   hudMode,
   language,
   menuOpen,
+  missionStepIndex,
   nearestTarget,
   searchOpen,
   selectedMissionId,
@@ -238,13 +271,17 @@ export default function Hud({
   shareToast,
   simMode,
   viewLayers,
+  welcomeOpen,
+  onAdvanceMissionStep,
   onCameraCommand,
   onCompleteMission,
+  onDismissWelcome,
   onOpenViewPanel,
   onRelatedItem,
   onSelectSearchTarget,
   onShareView,
   onStartMission,
+  onStartRecommendedMission,
   onToast,
   onToggleCameraMode,
   onToggleFullscreen,
@@ -267,6 +304,10 @@ export default function Hud({
   const targetInfo = SPACE_OBJECTS[selectedTarget];
   const targetLabel = targetInfo.name[language];
   const nearestTargetLabel = SPACE_OBJECTS[nearestTarget].name[language];
+  const recommendedMission = getRecommendedMission(
+    selectedTarget,
+    completedMissionIds,
+  );
 
   function openViewPanelWithFeedback(message: string) {
     setHudMode("full");
@@ -350,6 +391,16 @@ export default function Hud({
         />
       ) : null}
 
+      {welcomeOpen ? (
+        <WelcomeOverlay
+          copy={copy}
+          language={language}
+          recommendedMission={recommendedMission}
+          onDismiss={onDismissWelcome}
+          onStartRecommendedMission={onStartRecommendedMission}
+        />
+      ) : null}
+
       {hudMode === "full" ? (
         <>
           <LeftPanel
@@ -359,12 +410,16 @@ export default function Hud({
             controlSensitivity={controlSensitivity}
             copy={copy}
             detailOpen={detailOpen}
+            explorationLog={explorationLog}
             explorationPoint={explorationPoint}
             language={language}
+            missionStepIndex={missionStepIndex}
+            recommendedMission={recommendedMission}
             selectedMissionId={selectedMissionId}
             selectedTarget={selectedTarget}
             simMode={simMode}
             viewLayers={viewLayers}
+            onAdvanceMissionStep={onAdvanceMissionStep}
             onCompleteMission={onCompleteMission}
             onRelatedItem={onRelatedItem}
             onStartMission={onStartMission}
@@ -392,6 +447,7 @@ export default function Hud({
             copy={copy}
             explorationPoint={explorationPoint}
             language={language}
+            missionStepIndex={missionStepIndex}
             selectedMissionId={selectedMissionId}
             selectedTarget={selectedTarget}
           />
@@ -755,6 +811,61 @@ function SearchOverlay({
   );
 }
 
+function WelcomeOverlay({
+  copy,
+  language,
+  recommendedMission,
+  onDismiss,
+  onStartRecommendedMission,
+}: {
+  copy: (typeof COPY)[Language];
+  language: Language;
+  recommendedMission: Mission;
+  onDismiss: () => void;
+  onStartRecommendedMission: () => void;
+}) {
+  return (
+    <section className="pointer-events-auto absolute left-1/2 top-24 w-[min(92vw,520px)] -translate-x-1/2 border border-cyan-300/25 bg-black/72 p-5 shadow-[0_0_44px_rgba(8,145,178,0.18)] backdrop-blur-2xl">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-100">
+        {BRAND_NAME[language]}
+      </p>
+      <h1 className="mt-3 text-2xl font-semibold tracking-wide text-white">
+        {copy.welcomeTitle}
+      </h1>
+      <p className="mt-3 text-sm leading-6 text-slate-300">
+        {copy.welcomeBody}
+      </p>
+      <div className="mt-4 border border-white/10 bg-white/[0.03] p-3">
+        <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">
+          {copy.nextMission}
+        </p>
+        <h2 className="mt-2 text-base font-semibold text-slate-100">
+          {recommendedMission.title}
+        </h2>
+        <p className="mt-2 text-xs leading-5 text-slate-400">
+          {recommendedMission.objective}
+        </p>
+      </div>
+      <div className="mt-5 flex gap-3">
+        <button
+          type="button"
+          onClick={onStartRecommendedMission}
+          className="border border-cyan-300/45 bg-cyan-950/35 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100 transition hover:border-cyan-200 active:scale-[0.98]"
+        >
+          {copy.startRecommended}
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 transition hover:border-slate-300/35 hover:text-slate-100 active:scale-[0.98]"
+        >
+          {copy.welcomeSkip}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function LeftPanel({
   activePanel,
   collapsed,
@@ -762,12 +873,16 @@ function LeftPanel({
   controlSensitivity,
   copy,
   detailOpen,
+  explorationLog,
   explorationPoint,
   language,
+  missionStepIndex,
+  recommendedMission,
   selectedMissionId,
   selectedTarget,
   simMode,
   viewLayers,
+  onAdvanceMissionStep,
   onCompleteMission,
   onRelatedItem,
   onStartMission,
@@ -784,12 +899,16 @@ function LeftPanel({
   controlSensitivity: ControlSensitivity;
   copy: (typeof COPY)[Language];
   detailOpen: boolean;
+  explorationLog: ExplorationLogEntry[];
   explorationPoint: ExplorationPoint;
   language: Language;
+  missionStepIndex: number;
+  recommendedMission: Mission;
   selectedMissionId: string | null;
   selectedTarget: SelectedTarget;
   simMode: SimMode;
   viewLayers: ViewLayerState;
+  onAdvanceMissionStep: () => void;
   onCompleteMission: (missionId: string) => void;
   onRelatedItem: (item: string) => void;
   onStartMission: (mission: Mission) => void;
@@ -861,8 +980,12 @@ function LeftPanel({
           <MissionsTab
             completedMissionIds={completedMissionIds}
             copy={copy}
+            explorationLog={explorationLog}
+            missionStepIndex={missionStepIndex}
+            recommendedMission={recommendedMission}
             selectedMissionId={selectedMissionId}
             selectedTarget={selectedTarget}
+            onAdvanceMissionStep={onAdvanceMissionStep}
             onCompleteMission={onCompleteMission}
             onStartMission={onStartMission}
           />
@@ -975,19 +1098,40 @@ function InfoTab({
 function MissionsTab({
   completedMissionIds,
   copy,
+  explorationLog,
+  missionStepIndex,
+  recommendedMission,
   selectedMissionId,
   selectedTarget,
+  onAdvanceMissionStep,
   onCompleteMission,
   onStartMission,
 }: {
   completedMissionIds: string[];
   copy: (typeof COPY)[Language];
+  explorationLog: ExplorationLogEntry[];
+  missionStepIndex: number;
+  recommendedMission: Mission;
   selectedMissionId: string | null;
   selectedTarget: SelectedTarget;
+  onAdvanceMissionStep: () => void;
   onCompleteMission: (missionId: string) => void;
   onStartMission: (mission: Mission) => void;
 }) {
   const missions = getMissionsForTarget(selectedTarget);
+  const selectedMission = getMissionById(selectedMissionId);
+  const selectedMissionSteps = selectedMission
+    ? getMissionSteps(selectedMission)
+    : [];
+  const selectedMissionCompleted = selectedMission
+    ? completedMissionIds.includes(selectedMission.id)
+    : false;
+  const completedCount = completedMissionIds.length;
+  const totalCount = getMissionsForTarget("earth").length +
+    getMissionsForTarget("moon").length +
+    getMissionsForTarget("mars").length +
+    getMissionsForTarget("jupiter").length +
+    getMissionsForTarget("saturn").length;
 
   return (
     <div className="grid gap-3">
@@ -999,6 +1143,38 @@ function MissionsTab({
           {copy.missionBoardSubtitle}
         </p>
       </div>
+
+      <MissionProgress
+        completedCount={completedCount}
+        copy={copy}
+        totalCount={totalCount}
+      />
+
+      {selectedMission ? (
+        <ActiveMissionStepCard
+          completed={completedMissionIds.includes(selectedMission.id)}
+          copy={copy}
+          mission={selectedMission}
+          missionStepIndex={missionStepIndex}
+          steps={selectedMissionSteps}
+          onAdvanceMissionStep={onAdvanceMissionStep}
+          onCompleteMission={onCompleteMission}
+        />
+      ) : (
+        <RecommendedMissionCard
+          copy={copy}
+          mission={recommendedMission}
+          onStartMission={onStartMission}
+        />
+      )}
+
+      {selectedMission && selectedMissionCompleted ? (
+        <RecommendedMissionCard
+          copy={copy}
+          mission={recommendedMission}
+          onStartMission={onStartMission}
+        />
+      ) : null}
 
       {missions.map((mission) => {
         const status = getMissionStatus(
@@ -1071,7 +1247,200 @@ function MissionsTab({
           </article>
         );
       })}
+
+      <ExplorationLogPanel
+        copy={copy}
+        explorationLog={explorationLog}
+      />
     </div>
+  );
+}
+
+function MissionProgress({
+  completedCount,
+  copy,
+  totalCount,
+}: {
+  completedCount: number;
+  copy: (typeof COPY)[Language];
+  totalCount: number;
+}) {
+  const progressPercent =
+    totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  return (
+    <div className="border border-white/10 bg-white/[0.03] p-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          {copy.missionProgress}
+        </p>
+        <span className="text-[10px] uppercase tracking-[0.16em] text-emerald-200">
+          {completedCount}/{totalCount}
+        </span>
+      </div>
+      <div className="mt-3 h-1.5 border border-white/10 bg-black/40">
+        <div
+          className="h-full bg-cyan-300/70 shadow-[0_0_14px_rgba(34,211,238,0.35)]"
+          style={{ width: `${progressPercent}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function RecommendedMissionCard({
+  copy,
+  mission,
+  onStartMission,
+}: {
+  copy: (typeof COPY)[Language];
+  mission: Mission;
+  onStartMission: (mission: Mission) => void;
+}) {
+  return (
+    <article className="border border-emerald-300/20 bg-emerald-950/12 p-3">
+      <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">
+        {copy.nextMission}
+      </p>
+      <h3 className="mt-2 text-sm font-semibold text-slate-100">
+        {mission.title}
+      </h3>
+      <p className="mt-2 text-xs leading-5 text-slate-400">
+        {mission.objective}
+      </p>
+      <button
+        type="button"
+        onClick={() => onStartMission(mission)}
+        className="mt-3 border border-emerald-300/35 bg-emerald-950/20 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100 transition hover:border-emerald-200 active:scale-[0.98]"
+      >
+        {copy.startRecommended}
+      </button>
+    </article>
+  );
+}
+
+function ActiveMissionStepCard({
+  completed,
+  copy,
+  mission,
+  missionStepIndex,
+  steps,
+  onAdvanceMissionStep,
+  onCompleteMission,
+}: {
+  completed: boolean;
+  copy: (typeof COPY)[Language];
+  mission: Mission;
+  missionStepIndex: number;
+  steps: MissionStep[];
+  onAdvanceMissionStep: () => void;
+  onCompleteMission: (missionId: string) => void;
+}) {
+  const boundedStepIndex = Math.min(missionStepIndex, steps.length - 1);
+  const currentStep = steps[boundedStepIndex];
+  const stepNumber = boundedStepIndex + 1;
+
+  return (
+    <article className="border border-cyan-300/35 bg-cyan-950/18 p-3 shadow-[0_0_22px_rgba(34,211,238,0.12)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-100">
+            Active Mission Step {stepNumber}/3
+          </p>
+          <h3 className="mt-2 text-sm font-semibold text-slate-100">
+            {mission.title}
+          </h3>
+        </div>
+        <span className="border border-cyan-300/35 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-cyan-100">
+          {completed ? copy.completed : copy.active}
+        </span>
+      </div>
+      <div className="mt-3 flex gap-1">
+        {steps.map((step, index) => (
+          <span
+            key={step.id}
+            className={[
+              "h-1.5 flex-1 border border-white/10",
+              index <= boundedStepIndex
+                ? "bg-cyan-300/70"
+                : "bg-white/[0.04]",
+            ].join(" ")}
+          />
+        ))}
+      </div>
+      <h4 className="mt-3 text-sm font-semibold text-cyan-50">
+        {currentStep.title}
+      </h4>
+      <p className="mt-2 text-xs leading-5 text-slate-300">
+        {currentStep.instruction}
+      </p>
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={onAdvanceMissionStep}
+          disabled={completed}
+          className={[
+            "border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] transition",
+            completed
+              ? "cursor-not-allowed border-white/10 text-slate-600"
+              : "border-cyan-300/35 bg-cyan-950/25 text-cyan-100 hover:border-cyan-200 active:scale-[0.98]",
+          ].join(" ")}
+        >
+          {completed ? copy.completed : currentStep.actionLabel}
+        </button>
+        <button
+          type="button"
+          onClick={() => onCompleteMission(mission.id)}
+          disabled={completed}
+          className={[
+            "border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] transition",
+            completed
+              ? "cursor-not-allowed border-white/10 text-slate-600"
+              : "border-emerald-300/30 bg-emerald-950/18 text-emerald-100 hover:border-emerald-200 active:scale-[0.98]",
+          ].join(" ")}
+        >
+          Complete
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function ExplorationLogPanel({
+  copy,
+  explorationLog,
+}: {
+  copy: (typeof COPY)[Language];
+  explorationLog: ExplorationLogEntry[];
+}) {
+  return (
+    <section className="border border-white/10 bg-black/28 p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+        {copy.explorationLog}
+      </p>
+      <div className="mt-3 grid max-h-36 gap-2 overflow-y-auto">
+        {explorationLog.length === 0 ? (
+          <p className="text-xs text-slate-600">{copy.noLog}</p>
+        ) : (
+          explorationLog.slice(0, 6).map((entry) => (
+            <div
+              key={entry.id}
+              className="border border-white/10 bg-white/[0.03] p-2 text-xs"
+            >
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="uppercase tracking-[0.14em] text-slate-500">
+                  {entry.type}
+                </span>
+                <span className="font-mono text-[10px] text-slate-600">
+                  {entry.timestamp}
+                </span>
+              </div>
+              <p className="leading-5 text-slate-300">{entry.message}</p>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -1235,6 +1604,7 @@ function AssistantPanel({
   copy,
   explorationPoint,
   language,
+  missionStepIndex,
   selectedMissionId,
   selectedTarget,
 }: {
@@ -1243,6 +1613,7 @@ function AssistantPanel({
   copy: (typeof COPY)[Language];
   explorationPoint: ExplorationPoint;
   language: Language;
+  missionStepIndex: number;
   selectedMissionId: string | null;
   selectedTarget: SelectedTarget;
 }) {
@@ -1257,6 +1628,7 @@ function AssistantPanel({
     explorationPoint,
     language,
     mission,
+    missionStepIndex,
     selectedTarget,
   });
 
@@ -1285,6 +1657,7 @@ function getAssistantMessage({
   explorationPoint,
   language,
   mission,
+  missionStepIndex,
   selectedTarget,
 }: {
   cameraMode: CameraMode;
@@ -1293,16 +1666,20 @@ function getAssistantMessage({
   explorationPoint: ExplorationPoint;
   language: Language;
   mission: Mission | null;
+  missionStepIndex: number;
   selectedTarget: SelectedTarget;
 }) {
   if (cameraMode === "free") return copy.freeInstruction;
 
   if (mission) {
+    const steps = getMissionSteps(mission);
+    const currentStep = steps[Math.min(missionStepIndex, steps.length - 1)];
+
     if (completed) {
-      return `${copy.missionComplete}：${mission.title}。${mission.objective}`;
+      return `${copy.missionComplete}：${mission.title}。${copy.nextMission} 已在 Mission Board 中准备好。`;
     }
 
-    return `${mission.objective} ${copy.missionActiveInstruction}`;
+    return `Step ${Math.min(missionStepIndex + 1, steps.length)}/3：${currentStep.instruction}`;
   }
 
   if (explorationPoint) {

@@ -3,7 +3,12 @@
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import Hud from "./components/Hud";
-import { MISSIONS } from "./data/missions";
+import {
+  getMissionById,
+  getMissionSteps,
+  getRecommendedMission,
+  MISSIONS,
+} from "./data/missions";
 import { SPACE_OBJECTS } from "./data/spaceObjects";
 import type {
   ActivePanel,
@@ -11,6 +16,7 @@ import type {
   CameraCommandType,
   CameraMode,
   ControlSensitivity,
+  ExplorationLogEntry,
   ExplorationPoint,
   HudMode,
   Language,
@@ -57,7 +63,22 @@ export default function Home() {
   });
   const [simMode, setSimMode] = useState<SimMode>("CRUISE MODE");
   const [cameraCommand, setCameraCommand] = useState<CameraCommand>(null);
+  const [welcomeOpen, setWelcomeOpen] = useState(true);
+  const [missionStepIndex, setMissionStepIndex] = useState(0);
+  const [explorationLog, setExplorationLog] = useState<ExplorationLogEntry[]>(
+    [],
+  );
   const cameraCommandNonceRef = useRef(0);
+
+  useEffect(() => {
+    const hasSeenWelcome = window.localStorage.getItem(
+      "argonaut-v02-welcome-seen",
+    );
+    if (hasSeenWelcome === "true") {
+      const timeout = window.setTimeout(() => setWelcomeOpen(false), 0);
+      return () => window.clearTimeout(timeout);
+    }
+  }, []);
 
   useEffect(() => {
     if (!shareToast) return;
@@ -78,11 +99,40 @@ export default function Home() {
     setShareToast(message);
   }
 
+  function addExplorationLog(
+    missionId: string,
+    message: string,
+    type: ExplorationLogEntry["type"],
+  ) {
+    const timestamp = new Date().toLocaleTimeString("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    setExplorationLog((currentLog) => [
+      {
+        id: `${missionId}-${type}-${Date.now()}`,
+        missionId,
+        message,
+        timestamp,
+        type,
+      },
+      ...currentLog,
+    ]);
+  }
+
+  function dismissWelcome() {
+    window.localStorage.setItem("argonaut-v02-welcome-seen", "true");
+    setWelcomeOpen(false);
+  }
+
   function handleSelectTarget(target: SelectedTarget) {
     setLockBehavior("fly");
     setSelectedTarget(target);
     setExplorationPoint(null);
     setSelectedMissionId(null);
+    setMissionStepIndex(0);
     setCameraMode("locked");
     issueCameraCommand("focus");
   }
@@ -92,6 +142,7 @@ export default function Home() {
     setSelectedTarget(target);
     setExplorationPoint(null);
     setSelectedMissionId(null);
+    setMissionStepIndex(0);
     setCameraMode("locked");
   }
 
@@ -116,6 +167,7 @@ export default function Home() {
 
     if (matchingMission) {
       setSelectedMissionId(matchingMission.id);
+      setMissionStepIndex(1);
       setActivePanel("missions");
     }
   }
@@ -124,11 +176,18 @@ export default function Home() {
     const focusTarget = mission.focusTarget ?? mission.target;
 
     setSelectedMissionId(mission.id);
+    setMissionStepIndex(0);
     setSelectedTarget(focusTarget);
     setExplorationPoint(mission.explorationPoint ?? null);
     setCameraMode("locked");
     setLockBehavior("fly");
     setActivePanel("missions");
+    dismissWelcome();
+    addExplorationLog(
+      mission.id,
+      `任务已启动：${mission.title}`,
+      "started",
+    );
 
     if (mission.suggestedCameraMode === "overview") {
       issueCameraCommand("overview");
@@ -140,13 +199,65 @@ export default function Home() {
   }
 
   function handleCompleteMission(missionId: string) {
+    const mission = getMissionById(missionId);
+    const alreadyCompleted = completedMissionIds.includes(missionId);
+
     setSelectedMissionId(missionId);
+    setMissionStepIndex(2);
     setCompletedMissionIds((currentMissionIds) =>
       currentMissionIds.includes(missionId)
         ? currentMissionIds
         : [...currentMissionIds, missionId],
     );
-    showToast("任务已标记完成");
+    if (mission && !alreadyCompleted) {
+      addExplorationLog(
+        missionId,
+        `任务完成：${mission.title}`,
+        "completed",
+      );
+    }
+    showToast("任务完成，已写入 Exploration Log");
+  }
+
+  function handleAdvanceMissionStep() {
+    const mission = getMissionById(selectedMissionId);
+    if (!mission) return;
+
+    const steps = getMissionSteps(mission);
+    const currentStep = steps[missionStepIndex] ?? steps[0];
+
+    if (currentStep.target) {
+      setSelectedTarget(currentStep.target);
+    }
+
+    setExplorationPoint(currentStep.explorationPoint ?? null);
+    setCameraMode("locked");
+    setLockBehavior("fly");
+
+    if (currentStep.cameraCommand) {
+      issueCameraCommand(currentStep.cameraCommand);
+    }
+
+    addExplorationLog(
+      mission.id,
+      `${currentStep.title}：${currentStep.instruction}`,
+      "step",
+    );
+
+    if (missionStepIndex >= steps.length - 1) {
+      handleCompleteMission(mission.id);
+      return;
+    }
+
+    setMissionStepIndex((currentIndex) =>
+      Math.min(currentIndex + 1, steps.length - 1),
+    );
+  }
+
+  function handleStartRecommendedMission() {
+    handleStartMission(
+      getRecommendedMission(selectedTarget, completedMissionIds),
+    );
   }
 
   function handleSelectSearchTarget(target: SelectedTarget) {
@@ -255,9 +366,11 @@ export default function Home() {
         completedMissionIds={completedMissionIds}
         detailOpen={detailOpen}
         explorationPoint={explorationPoint}
+        explorationLog={explorationLog}
         hudMode={hudMode}
         language={language}
         menuOpen={menuOpen}
+        missionStepIndex={missionStepIndex}
         nearestTarget={nearestTarget}
         selectedTarget={selectedTarget}
         selectedMissionId={selectedMissionId}
@@ -265,13 +378,17 @@ export default function Home() {
         shareToast={shareToast}
         simMode={simMode}
         viewLayers={viewLayers}
+        welcomeOpen={welcomeOpen}
+        onAdvanceMissionStep={handleAdvanceMissionStep}
         onCameraCommand={issueCameraCommand}
         onCompleteMission={handleCompleteMission}
+        onDismissWelcome={dismissWelcome}
         onOpenViewPanel={handleOpenViewPanel}
         onRelatedItem={handleRelatedItem}
         onSelectSearchTarget={handleSelectSearchTarget}
         onShareView={handleShareView}
         onStartMission={handleStartMission}
+        onStartRecommendedMission={handleStartRecommendedMission}
         onToast={showToast}
         onToggleCameraMode={handleToggleCameraMode}
         onToggleFullscreen={handleToggleFullscreen}

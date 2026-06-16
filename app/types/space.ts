@@ -27,6 +27,16 @@ export type ViewLayerState = {
 
 export type MissionStatus = "locked" | "active" | "completed";
 
+export type MissionStep = {
+  id: string;
+  title: string;
+  instruction: string;
+  actionLabel: string;
+  cameraCommand?: CameraCommandType;
+  target?: SpaceTarget;
+  explorationPoint?: MarsExplorationPoint;
+};
+
 export type Mission = {
   id: string;
   target: SpaceTarget;
@@ -37,6 +47,15 @@ export type Mission = {
   focusTarget?: SpaceTarget;
   explorationPoint?: MarsExplorationPoint;
   suggestedCameraMode?: "overview" | "close" | "orbit";
+  steps?: MissionStep[];
+};
+
+export type ExplorationLogEntry = {
+  id: string;
+  missionId: string;
+  message: string;
+  timestamp: string;
+  type: "started" | "step" | "completed";
 };
 
 export type SimMode = "REAL RATE" | "CRUISE MODE" | "PAUSED";

@@ -1,11 +1,11 @@
-import type { Mission, SpaceTarget } from "@/app/types/space";
+import type { Mission, MissionStep, SpaceTarget } from "@/app/types/space";
 
 export const MISSIONS: Mission[] = [
   {
     id: "earth-moon-system",
     target: "earth",
     title: "观察地月系统",
-    description: "AI 舰载助手建议先建立地球与月球的空间关系。",
+    description: "任务控制建议先建立地球与月球的空间关系。",
     objective: "锁定地球，观察月球轨道线和地月距离比例。",
     status: "locked",
     focusTarget: "earth",
@@ -174,4 +174,54 @@ export function getMissionsForTarget(target: SpaceTarget) {
 export function getMissionById(missionId: string | null) {
   if (!missionId) return null;
   return MISSIONS.find((mission) => mission.id === missionId) ?? null;
+}
+
+export function getRecommendedMission(
+  target: SpaceTarget,
+  completedMissionIds: string[],
+) {
+  return (
+    getMissionsForTarget(target).find(
+      (mission) => !completedMissionIds.includes(mission.id),
+    ) ??
+    MISSIONS.find((mission) => !completedMissionIds.includes(mission.id)) ??
+    MISSIONS[0]
+  );
+}
+
+export function getMissionSteps(mission: Mission): MissionStep[] {
+  if (mission.steps) return mission.steps;
+
+  const focusTarget = mission.focusTarget ?? mission.target;
+
+  return [
+    {
+      id: `${mission.id}-step-1`,
+      title: "锁定任务目标",
+      instruction: `建立 ${mission.title} 的导航锁定，并确认当前目标进入视野中心。`,
+      actionLabel: "锁定目标",
+      cameraCommand: "focus",
+      target: focusTarget,
+    },
+    {
+      id: `${mission.id}-step-2`,
+      title: "执行近距观察",
+      instruction: mission.explorationPoint
+        ? "切入指定探索点，观察目标区域的地貌特征和空间关系。"
+        : "切近当前目标，观察任务要求中的主要视觉线索。",
+      actionLabel: "切入观察",
+      cameraCommand:
+        mission.suggestedCameraMode === "overview" ? "overview" : "close",
+      target: focusTarget,
+      explorationPoint: mission.explorationPoint,
+    },
+    {
+      id: `${mission.id}-step-3`,
+      title: "记录任务结论",
+      instruction: "确认已完成观察，将本次探索写入 Exploration Log。",
+      actionLabel: "完成任务",
+      cameraCommand: "focus",
+      target: focusTarget,
+    },
+  ];
 }
