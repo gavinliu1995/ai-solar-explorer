@@ -9,10 +9,16 @@ import {
   getRecommendedMission,
   MISSIONS,
 } from "./data/missions";
+import {
+  getArchiveMissionById,
+} from "./data/archiveMissions";
 import { SPACE_OBJECTS } from "./data/spaceObjects";
 import { getTourById } from "./data/tours";
 import type {
   ActivePanel,
+  ArchiveExpeditionMode,
+  ArchiveMission,
+  ArchiveMissionId,
   CameraCommand,
   CameraCommandType,
   CameraMode,
@@ -23,6 +29,7 @@ import type {
   Language,
   LockBehavior,
   Mission,
+  MissionWaypoint,
   SelectedTarget,
   SimMode,
   TourId,
@@ -66,6 +73,7 @@ export default function Home() {
     ecliptic: false,
     kuiperBelt: true,
     labels: true,
+    missionRoutes: true,
     moons: true,
     orbits: true,
     probes: true,
@@ -87,10 +95,20 @@ export default function Home() {
   );
   const [tourPanelOpen, setTourPanelOpen] = useState(false);
   const [tourMode, setTourMode] = useState<TourMode>("idle");
+  const [selectedArchiveMissionId, setSelectedArchiveMissionId] =
+    useState<ArchiveMissionId | null>(null);
+  const [currentArchiveWaypointIndex, setCurrentArchiveWaypointIndex] =
+    useState(0);
+  const [archivePanelOpen, setArchivePanelOpen] = useState(false);
+  const [archiveExpeditionMode, setArchiveExpeditionMode] =
+    useState<ArchiveExpeditionMode>("idle");
   const cameraCommandNonceRef = useRef(0);
   const lastLoggedTargetRef = useRef<SelectedTarget>("earth");
   const activeTour = getTourById(activeTourId);
   const currentTourStop = activeTour?.stops[activeTourStopIndex] ?? null;
+  const selectedArchiveMission = getArchiveMissionById(selectedArchiveMissionId);
+  const currentArchiveWaypoint =
+    selectedArchiveMission?.waypoints[currentArchiveWaypointIndex] ?? null;
 
   useEffect(() => {
     const hasSeenWelcome = window.localStorage.getItem(
@@ -211,6 +229,161 @@ export default function Home() {
       `STOP FOCUSED — ${stop.title}.`,
       "tour_stop_focused",
     );
+  }
+
+  function cameraCommandForWaypoint(waypoint: MissionWaypoint): CameraCommandType {
+    if (waypoint.cameraMode === "overview") return "overview";
+    if (waypoint.cameraMode === "close") return "close";
+    return "focus";
+  }
+
+  function applyArchiveWaypoint(
+    mission: ArchiveMission,
+    waypointIndex: number,
+    options: { log?: boolean } = {},
+  ) {
+    const waypoint = mission.waypoints[waypointIndex];
+    if (!waypoint) return;
+
+    setCurrentArchiveWaypointIndex(waypointIndex);
+    setSelectedTarget(waypoint.target);
+    setExplorationPoint(null);
+    setCameraMode("locked");
+    setLockBehavior("fly");
+    setViewMode("solar-system");
+    setViewLayers((currentLayers) => ({
+      ...currentLayers,
+      labels: true,
+      missionRoutes: true,
+      orbits: true,
+      ...(waypoint.requiredLayers ?? {}),
+    }));
+    issueCameraCommand(cameraCommandForWaypoint(waypoint));
+    recordTargetLocked(waypoint.target, waypoint.id);
+
+    if (options.log !== false) {
+      addCaptainLog(
+        waypoint.id,
+        `WAYPOINT LOCKED — ${waypoint.label}.`,
+        "archive_waypoint_locked",
+      );
+    }
+  }
+
+  function handleViewArchiveRoute(missionId: ArchiveMissionId) {
+    const mission = getArchiveMissionById(missionId);
+    if (!mission) return;
+
+    setSelectedArchiveMissionId(mission.id);
+    setArchiveExpeditionMode("idle");
+    setArchivePanelOpen(true);
+    setHudMode("full");
+    setActivePanel("archives");
+    setViewLayers((currentLayers) => ({
+      ...currentLayers,
+      labels: true,
+      missionRoutes: true,
+      orbits: true,
+    }));
+    addCaptainLog(
+      mission.id,
+      `ROUTE LOADED — ${mission.name} trajectory profile.`,
+      "archive_route_loaded",
+    );
+    applyArchiveWaypoint(mission, 0, { log: false });
+    showToast(`${mission.name} route loaded`);
+  }
+
+  function handleSelectArchiveWaypoint(index: number) {
+    if (!selectedArchiveMission?.waypoints[index]) return;
+    applyArchiveWaypoint(selectedArchiveMission, index);
+  }
+
+  function handleNextArchiveWaypoint() {
+    if (!selectedArchiveMission) return;
+
+    const nextIndex = currentArchiveWaypointIndex + 1;
+    if (nextIndex >= selectedArchiveMission.waypoints.length) {
+      if (archiveExpeditionMode === "active") {
+        handleCompleteArchiveExpedition();
+      }
+      return;
+    }
+
+    applyArchiveWaypoint(selectedArchiveMission, nextIndex);
+  }
+
+  function handlePreviousArchiveWaypoint() {
+    if (!selectedArchiveMission) return;
+    applyArchiveWaypoint(
+      selectedArchiveMission,
+      Math.max(currentArchiveWaypointIndex - 1, 0),
+    );
+  }
+
+  function handleFocusArchiveWaypoint() {
+    if (!selectedArchiveMission || !currentArchiveWaypoint) return;
+    applyArchiveWaypoint(selectedArchiveMission, currentArchiveWaypointIndex, {
+      log: false,
+    });
+  }
+
+  function handleStartArchiveExpedition(missionId?: ArchiveMissionId) {
+    const mission =
+      getArchiveMissionById(missionId ?? selectedArchiveMissionId) ??
+      selectedArchiveMission;
+    if (!mission) return;
+
+    if (activeTourId) {
+      showToast("Archive expedition started. Grand Tour progress is preserved.");
+    }
+
+    setSelectedArchiveMissionId(mission.id);
+    setArchiveExpeditionMode("active");
+    setArchivePanelOpen(true);
+    setHudMode("full");
+    setActivePanel("archives");
+    dismissWelcome();
+    addCaptainLog(
+      mission.id,
+      `EXPEDITION STARTED — ${mission.name}.`,
+      "archive_expedition_started",
+    );
+    applyArchiveWaypoint(mission, 0, { log: false });
+  }
+
+  function handleCompleteArchiveExpedition() {
+    if (!selectedArchiveMission) return;
+
+    setArchiveExpeditionMode("completed");
+    addCaptainLog(
+      selectedArchiveMission.id,
+      `EXPEDITION COMPLETE — ${selectedArchiveMission.name} profile completed.`,
+      "archive_expedition_completed",
+    );
+    showToast(`${selectedArchiveMission.name} expedition complete`);
+  }
+
+  function handleClearArchiveRoute() {
+    if (selectedArchiveMission) {
+      addCaptainLog(
+        selectedArchiveMission.id,
+        `ROUTE CLEARED — ${selectedArchiveMission.name}.`,
+        "archive_route_cleared",
+      );
+    }
+    setSelectedArchiveMissionId(null);
+    setCurrentArchiveWaypointIndex(0);
+    setArchiveExpeditionMode("idle");
+    setArchivePanelOpen(false);
+    showToast("Archive route cleared");
+  }
+
+  function handleOpenArchivesPanel() {
+    setHudMode("full");
+    setActivePanel("archives");
+    setArchivePanelOpen(true);
+    showToast("Mission Archives opened");
   }
 
   function handleSelectTarget(target: SelectedTarget) {
@@ -487,6 +660,11 @@ export default function Home() {
     handleSelectTarget(target);
   }
 
+  function handleSelectSearchArchive(missionId: ArchiveMissionId) {
+    setSearchOpen(false);
+    handleViewArchiveRoute(missionId);
+  }
+
   async function handleShareView() {
     const brandName = language === "zh" ? "寰宇星舟" : "Argonaut";
     const targetName = SPACE_OBJECTS[selectedTarget].name[language];
@@ -568,7 +746,10 @@ export default function Home() {
         lockBehavior={lockBehavior}
         onLockTarget={handleLockTarget}
         onNearestTargetChange={setNearestTarget}
+        onSelectArchiveWaypoint={handleSelectArchiveWaypoint}
         selectedTarget={selectedTarget}
+        selectedArchiveMission={selectedArchiveMission}
+        currentArchiveWaypointIndex={currentArchiveWaypointIndex}
         setExplorationPoint={handleExplorationPointChange}
         viewLayers={viewLayers}
         viewMode={viewMode}
@@ -596,6 +777,10 @@ export default function Home() {
         completedTourStopIds={completedTourStopIds}
         tourMode={tourMode}
         tourPanelOpen={tourPanelOpen}
+        selectedArchiveMissionId={selectedArchiveMissionId}
+        currentArchiveWaypointIndex={currentArchiveWaypointIndex}
+        archiveExpeditionMode={archiveExpeditionMode}
+        archivePanelOpen={archivePanelOpen}
         viewLayers={viewLayers}
         viewMode={viewMode}
         welcomeOpen={welcomeOpen}
@@ -608,11 +793,21 @@ export default function Home() {
         onFocusTourStop={handleFocusTourStop}
         onJumpToTourStop={handleJumpToTourStop}
         onNextTourStop={handleNextTourStop}
+        onClearArchiveRoute={handleClearArchiveRoute}
+        onCompleteArchiveExpedition={handleCompleteArchiveExpedition}
+        onFocusArchiveWaypoint={handleFocusArchiveWaypoint}
+        onNextArchiveWaypoint={handleNextArchiveWaypoint}
         onOpenViewPanel={handleOpenViewPanel}
+        onOpenArchivesPanel={handleOpenArchivesPanel}
+        onPreviousArchiveWaypoint={handlePreviousArchiveWaypoint}
         onRelatedItem={handleRelatedItem}
         onRestartTour={handleRestartTour}
+        onSelectArchiveWaypoint={handleSelectArchiveWaypoint}
+        onSelectSearchArchive={handleSelectSearchArchive}
         onSelectSearchTarget={handleSelectSearchTarget}
         onShareView={handleShareView}
+        onStartArchiveExpedition={handleStartArchiveExpedition}
+        onViewArchiveRoute={handleViewArchiveRoute}
         onStartMission={handleStartMission}
         onStartRecommendedMission={handleStartRecommendedMission}
         onStartTour={handleStartTour}

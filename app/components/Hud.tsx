@@ -2,6 +2,14 @@
 
 import { useState } from "react";
 import {
+  ARCHIVE_CATEGORY_LABELS,
+  ARCHIVE_MISSIONS,
+  ARCHIVE_SEARCH_ALIASES,
+  getArchiveMissionById,
+  getArchiveMissionsForTarget,
+  getDiscoveryCardsForMission,
+} from "@/app/data/archiveMissions";
+import {
   MISSIONS,
   getMissionById,
   getMissionSteps,
@@ -12,6 +20,10 @@ import { SPACE_OBJECTS } from "@/app/data/spaceObjects";
 import { TOURS, getTourById } from "@/app/data/tours";
 import type {
   ActivePanel,
+  ArchiveExpeditionMode,
+  ArchiveMission,
+  ArchiveMissionCategory,
+  ArchiveMissionId,
   CameraCommandType,
   CameraMode,
   ControlSensitivity,
@@ -60,7 +72,11 @@ type HudProps = {
   simMode: SimMode;
   activeTourId: TourId | null;
   activeTourStopIndex: number;
+  archiveExpeditionMode: ArchiveExpeditionMode;
+  archivePanelOpen: boolean;
   completedTourStopIds: string[];
+  currentArchiveWaypointIndex: number;
+  selectedArchiveMissionId: ArchiveMissionId | null;
   tourMode: TourMode;
   tourPanelOpen: boolean;
   viewLayers: ViewLayerState;
@@ -69,18 +85,27 @@ type HudProps = {
   onAdvanceMissionStep: () => void;
   onCameraCommand: (command: CameraCommandType) => void;
   onCompleteMission: (missionId: string) => void;
+  onClearArchiveRoute: () => void;
+  onCompleteArchiveExpedition: () => void;
   onCompleteTourStop: () => void;
   onDismissWelcome: () => void;
   onExitTour: () => void;
+  onFocusArchiveWaypoint: () => void;
   onFocusTourStop: () => void;
   onJumpToTourStop: (stopIndex: number) => void;
+  onNextArchiveWaypoint: () => void;
   onNextTourStop: () => void;
+  onOpenArchivesPanel: () => void;
   onOpenViewPanel: () => void;
+  onPreviousArchiveWaypoint: () => void;
   onRelatedItem: (item: string) => void;
   onRestartTour: () => void;
+  onSelectArchiveWaypoint: (index: number) => void;
+  onSelectSearchArchive: (missionId: ArchiveMissionId) => void;
   onSelectSearchTarget: (target: SelectedTarget) => void;
   onShareView: () => void;
   onStartMission: (mission: Mission) => void;
+  onStartArchiveExpedition: (missionId?: ArchiveMissionId) => void;
   onStartRecommendedMission: () => void;
   onStartTour: (tourId: TourId) => void;
   onStartTourRecommendedMission: () => void;
@@ -88,6 +113,7 @@ type HudProps = {
   onToggleCameraMode: () => void;
   onToggleFullscreen: () => void;
   onToggleHudMode: () => void;
+  onViewArchiveRoute: (missionId: ArchiveMissionId) => void;
   setActivePanel: (panel: ActivePanel) => void;
   setControlSensitivity: (sensitivity: ControlSensitivity) => void;
   setDetailOpen: (open: boolean) => void;
@@ -199,6 +225,28 @@ const COPY = {
     welcomeTitle: "Welcome aboard",
     explorationLog: "Exploration Log",
     captainLog: "Captain's Log",
+    archives: "Archives",
+    archiveCatalog: "Mission Archives",
+    archiveDisclaimer:
+      "Mission routes are simplified educational visualizations, not precise flight dynamics.",
+    archiveExpeditionActive: "Expedition Active",
+    archiveExpeditionComplete: "Expedition Complete",
+    archiveRouteLoaded: "Mission Route Loaded",
+    clearRoute: "Clear Route",
+    completeExpedition: "Complete Expedition",
+    discoveryCards: "Discovery Cards",
+    focusWaypoint: "Focus Waypoint",
+    keyDiscoveries: "Key Discoveries",
+    missionArchives: "Mission Archives",
+    nextWaypoint: "Next Waypoint",
+    previousWaypoint: "Previous Waypoint",
+    primaryTargets: "Primary Targets",
+    relatedArchives: "Related Archives",
+    routes: "Routes",
+    showMissionRoutes: "Show Mission Routes",
+    startExpedition: "Start Expedition",
+    viewRoute: "View Route",
+    waypoint: "Waypoint",
     exitTour: "Exit Tour",
     focusStop: "Focus Current Stop",
     jumpToStop: "Jump to Stop",
@@ -308,6 +356,28 @@ const COPY = {
     welcomeTitle: "欢迎登舰",
     explorationLog: "Exploration Log",
     captainLog: "航行日志",
+    archives: "档案",
+    archiveCatalog: "任务档案馆",
+    archiveDisclaimer:
+      "任务路线是简化教育可视化，不代表精确飞行动力学或真实轨道。",
+    archiveExpeditionActive: "远征进行中",
+    archiveExpeditionComplete: "远征完成",
+    archiveRouteLoaded: "任务路线已载入",
+    clearRoute: "清除路线",
+    completeExpedition: "完成远征",
+    discoveryCards: "发现卡片",
+    focusWaypoint: "聚焦航点",
+    keyDiscoveries: "关键发现",
+    missionArchives: "任务档案馆",
+    nextWaypoint: "下一航点",
+    previousWaypoint: "上一航点",
+    primaryTargets: "主要目标",
+    relatedArchives: "相关任务档案",
+    routes: "航线",
+    showMissionRoutes: "显示任务路线",
+    startExpedition: "启动远征",
+    viewRoute: "查看路线",
+    waypoint: "航点",
     exitTour: "退出路线",
     focusStop: "聚焦本站",
     jumpToStop: "跳转站点",
@@ -398,7 +468,10 @@ export default function Hud({
   simMode,
   activeTourId,
   activeTourStopIndex,
+  archiveExpeditionMode,
   completedTourStopIds,
+  currentArchiveWaypointIndex,
+  selectedArchiveMissionId,
   tourMode,
   tourPanelOpen,
   viewLayers,
@@ -406,18 +479,27 @@ export default function Hud({
   welcomeOpen,
   onAdvanceMissionStep,
   onCameraCommand,
+  onClearArchiveRoute,
+  onCompleteArchiveExpedition,
   onCompleteMission,
   onCompleteTourStop,
   onDismissWelcome,
   onExitTour,
+  onFocusArchiveWaypoint,
   onFocusTourStop,
   onJumpToTourStop,
+  onNextArchiveWaypoint,
   onNextTourStop,
+  onOpenArchivesPanel,
   onOpenViewPanel,
+  onPreviousArchiveWaypoint,
   onRelatedItem,
   onRestartTour,
+  onSelectArchiveWaypoint,
+  onSelectSearchArchive,
   onSelectSearchTarget,
   onShareView,
+  onStartArchiveExpedition,
   onStartMission,
   onStartRecommendedMission,
   onStartTour,
@@ -426,6 +508,7 @@ export default function Hud({
   onToggleCameraMode,
   onToggleFullscreen,
   onToggleHudMode,
+  onViewArchiveRoute,
   setActivePanel,
   setControlSensitivity,
   setDetailOpen,
@@ -450,6 +533,7 @@ export default function Hud({
     completedMissionIds,
   );
   const activeTour = getTourById(activeTourId);
+  const selectedArchiveMission = getArchiveMissionById(selectedArchiveMissionId);
 
   function openViewPanelWithFeedback(message: string) {
     setHudMode("full");
@@ -529,6 +613,7 @@ export default function Hud({
           query={searchQuery}
           setQuery={setSearchQuery}
           onClose={() => setSearchOpen(false)}
+          onSelectArchive={onSelectSearchArchive}
           onSelectTarget={onSelectSearchTarget}
         />
       ) : null}
@@ -560,6 +645,9 @@ export default function Hud({
             language={language}
             missionStepIndex={missionStepIndex}
             recommendedMission={recommendedMission}
+            selectedArchiveMission={selectedArchiveMission}
+            archiveExpeditionMode={archiveExpeditionMode}
+            currentArchiveWaypointIndex={currentArchiveWaypointIndex}
             selectedMissionId={selectedMissionId}
             selectedTarget={selectedTarget}
             simMode={simMode}
@@ -567,17 +655,26 @@ export default function Hud({
             viewLayers={viewLayers}
             viewMode={viewMode}
             onAdvanceMissionStep={onAdvanceMissionStep}
+            onClearArchiveRoute={onClearArchiveRoute}
+            onCompleteArchiveExpedition={onCompleteArchiveExpedition}
             onCompleteMission={onCompleteMission}
             onCompleteTourStop={onCompleteTourStop}
             onExitTour={onExitTour}
+            onFocusArchiveWaypoint={onFocusArchiveWaypoint}
             onFocusTourStop={onFocusTourStop}
             onJumpToTourStop={onJumpToTourStop}
+            onNextArchiveWaypoint={onNextArchiveWaypoint}
             onNextTourStop={onNextTourStop}
+            onPreviousArchiveWaypoint={onPreviousArchiveWaypoint}
             onRelatedItem={onRelatedItem}
             onRestartTour={onRestartTour}
+            onSelectArchiveWaypoint={onSelectArchiveWaypoint}
             onStartMission={onStartMission}
+            onStartArchiveExpedition={onStartArchiveExpedition}
             onStartTour={onStartTour}
             onStartTourRecommendedMission={onStartTourRecommendedMission}
+            onSelectTarget={setSelectedTarget}
+            onViewArchiveRoute={onViewArchiveRoute}
             setActivePanel={setActivePanel}
             setCollapsed={setLeftPanelCollapsed}
             setControlSensitivity={setControlSensitivity}
@@ -591,6 +688,10 @@ export default function Hud({
             language={language}
             onFullscreen={onToggleFullscreen}
             onOpenLayers={() => openViewPanelWithFeedback(copy.layersOpened)}
+            onOpenRoutes={() => {
+              setLeftPanelCollapsed(false);
+              onOpenArchivesPanel();
+            }}
             onOpenSettings={() => openViewPanelWithFeedback(copy.settingsOpened)}
             onTriggerCommand={(command) => {
               onCameraCommand(command);
@@ -604,9 +705,18 @@ export default function Hud({
             completedMissionIds={completedMissionIds}
             completedTourStopIds={completedTourStopIds}
             copy={copy}
+            currentArchiveWaypointIndex={currentArchiveWaypointIndex}
             explorationPoint={explorationPoint}
             language={language}
             missionStepIndex={missionStepIndex}
+            archiveExpeditionMode={archiveExpeditionMode}
+            selectedArchiveMission={selectedArchiveMission}
+            onClearArchiveRoute={onClearArchiveRoute}
+            onCompleteArchiveExpedition={onCompleteArchiveExpedition}
+            onFocusArchiveWaypoint={onFocusArchiveWaypoint}
+            onNextArchiveWaypoint={onNextArchiveWaypoint}
+            onPreviousArchiveWaypoint={onPreviousArchiveWaypoint}
+            onStartArchiveExpedition={onStartArchiveExpedition}
             onCompleteTourStop={onCompleteTourStop}
             onFocusTourStop={onFocusTourStop}
             onNextTourStop={onNextTourStop}
@@ -937,6 +1047,7 @@ function SearchOverlay({
   query,
   setQuery,
   onClose,
+  onSelectArchive,
   onSelectTarget,
 }: {
   copy: (typeof COPY)[Language];
@@ -944,6 +1055,7 @@ function SearchOverlay({
   query: string;
   setQuery: (query: string) => void;
   onClose: () => void;
+  onSelectArchive: (missionId: ArchiveMissionId) => void;
   onSelectTarget: (target: SelectedTarget) => void;
 }) {
   const normalizedQuery = query.trim().toLowerCase();
@@ -953,6 +1065,16 @@ function SearchOverlay({
       !normalizedQuery ||
       info.name.en.toLowerCase().includes(normalizedQuery) ||
       info.name.zh.includes(query.trim())
+    );
+  });
+  const archiveResults = ARCHIVE_MISSIONS.filter((mission) => {
+    const aliases = ARCHIVE_SEARCH_ALIASES[mission.id];
+
+    return (
+      !normalizedQuery ||
+      mission.name.toLowerCase().includes(normalizedQuery) ||
+      mission.subtitle.toLowerCase().includes(normalizedQuery) ||
+      aliases.some((alias) => alias.toLowerCase().includes(normalizedQuery))
     );
   });
 
@@ -977,22 +1099,53 @@ function SearchOverlay({
         onKeyDown={(event) => {
           if (event.key === "Enter" && results[0]) {
             onSelectTarget(results[0]);
+          } else if (event.key === "Enter" && archiveResults[0]) {
+            onSelectArchive(archiveResults[0].id);
           }
         }}
         placeholder={copy.searchPlaceholder}
         className="w-full border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-300/45"
       />
-      <div className="mt-3 grid gap-2">
-        {results.map((target) => (
-          <button
-            key={target}
-            type="button"
-            onClick={() => onSelectTarget(target)}
-            className="border border-white/10 bg-white/[0.03] px-3 py-2 text-left text-xs uppercase tracking-[0.18em] text-slate-300 transition hover:border-cyan-300/40 hover:bg-cyan-950/25 hover:text-cyan-100"
-          >
-            {SPACE_OBJECTS[target].name[language]}
-          </button>
-        ))}
+      <div className="mt-3 grid max-h-[52vh] gap-4 overflow-y-auto">
+        <section>
+          <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+            Targets
+          </p>
+          <div className="grid gap-2">
+            {results.map((target) => (
+              <button
+                key={target}
+                type="button"
+                onClick={() => onSelectTarget(target)}
+                className="border border-white/10 bg-white/[0.03] px-3 py-2 text-left text-xs uppercase tracking-[0.18em] text-slate-300 transition hover:border-cyan-300/40 hover:bg-cyan-950/25 hover:text-cyan-100"
+              >
+                {SPACE_OBJECTS[target].name[language]}
+              </button>
+            ))}
+          </div>
+        </section>
+        <section>
+          <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+            {copy.missionArchives}
+          </p>
+          <div className="grid gap-2">
+            {archiveResults.map((mission) => (
+              <button
+                key={mission.id}
+                type="button"
+                onClick={() => onSelectArchive(mission.id)}
+                className="border border-white/10 bg-white/[0.03] px-3 py-2 text-left transition hover:border-emerald-300/40 hover:bg-emerald-950/18"
+              >
+                <span className="block text-xs font-semibold uppercase tracking-[0.16em] text-slate-200">
+                  {mission.name}
+                </span>
+                <span className="mt-1 block text-[11px] leading-4 text-slate-500">
+                  {mission.subtitle}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -1068,6 +1221,9 @@ function LeftPanel({
   language,
   missionStepIndex,
   recommendedMission,
+  selectedArchiveMission,
+  archiveExpeditionMode,
+  currentArchiveWaypointIndex,
   selectedMissionId,
   selectedTarget,
   simMode,
@@ -1075,17 +1231,26 @@ function LeftPanel({
   viewLayers,
   viewMode,
   onAdvanceMissionStep,
+  onClearArchiveRoute,
+  onCompleteArchiveExpedition,
   onCompleteMission,
   onCompleteTourStop,
   onExitTour,
+  onFocusArchiveWaypoint,
   onFocusTourStop,
   onJumpToTourStop,
+  onNextArchiveWaypoint,
   onNextTourStop,
+  onPreviousArchiveWaypoint,
   onRelatedItem,
   onRestartTour,
+  onSelectArchiveWaypoint,
+  onSelectTarget,
+  onStartArchiveExpedition,
   onStartMission,
   onStartTour,
   onStartTourRecommendedMission,
+  onViewArchiveRoute,
   setActivePanel,
   setCollapsed,
   setControlSensitivity,
@@ -1108,6 +1273,9 @@ function LeftPanel({
   language: Language;
   missionStepIndex: number;
   recommendedMission: Mission;
+  selectedArchiveMission: ArchiveMission | null;
+  archiveExpeditionMode: ArchiveExpeditionMode;
+  currentArchiveWaypointIndex: number;
   selectedMissionId: string | null;
   selectedTarget: SelectedTarget;
   simMode: SimMode;
@@ -1115,17 +1283,26 @@ function LeftPanel({
   viewLayers: ViewLayerState;
   viewMode: ViewMode;
   onAdvanceMissionStep: () => void;
+  onClearArchiveRoute: () => void;
+  onCompleteArchiveExpedition: () => void;
   onCompleteMission: (missionId: string) => void;
   onCompleteTourStop: () => void;
   onExitTour: () => void;
+  onFocusArchiveWaypoint: () => void;
   onFocusTourStop: () => void;
   onJumpToTourStop: (stopIndex: number) => void;
+  onNextArchiveWaypoint: () => void;
   onNextTourStop: () => void;
+  onPreviousArchiveWaypoint: () => void;
   onRelatedItem: (item: string) => void;
   onRestartTour: () => void;
+  onSelectArchiveWaypoint: (index: number) => void;
+  onSelectTarget: (target: SelectedTarget) => void;
+  onStartArchiveExpedition: (missionId?: ArchiveMissionId) => void;
   onStartMission: (mission: Mission) => void;
   onStartTour: (tourId: TourId) => void;
   onStartTourRecommendedMission: () => void;
+  onViewArchiveRoute: (missionId: ArchiveMissionId) => void;
   setActivePanel: (panel: ActivePanel) => void;
   setCollapsed: (collapsed: boolean) => void;
   setControlSensitivity: (sensitivity: ControlSensitivity) => void;
@@ -1163,7 +1340,7 @@ function LeftPanel({
       </div>
 
       <div className="flex border-b border-white/10">
-        {(["info", "missions", "tour", "view"] as ActivePanel[]).map((panel) => (
+        {(["info", "missions", "tour", "archives", "view"] as ActivePanel[]).map((panel) => (
           <button
             key={panel}
             type="button"
@@ -1190,6 +1367,7 @@ function LeftPanel({
             selectedTarget={selectedTarget}
             viewMode={viewMode}
             onRelatedItem={onRelatedItem}
+            onViewArchiveRoute={onViewArchiveRoute}
             setDetailOpen={setDetailOpen}
           />
         ) : activePanel === "missions" ? (
@@ -1223,6 +1401,23 @@ function LeftPanel({
             onStartTour={onStartTour}
             onStartTourRecommendedMission={onStartTourRecommendedMission}
           />
+        ) : activePanel === "archives" ? (
+          <ArchivesTab
+            archiveExpeditionMode={archiveExpeditionMode}
+            copy={copy}
+            currentArchiveWaypointIndex={currentArchiveWaypointIndex}
+            language={language}
+            selectedArchiveMission={selectedArchiveMission}
+            onClearArchiveRoute={onClearArchiveRoute}
+            onCompleteArchiveExpedition={onCompleteArchiveExpedition}
+            onFocusArchiveWaypoint={onFocusArchiveWaypoint}
+            onNextArchiveWaypoint={onNextArchiveWaypoint}
+            onPreviousArchiveWaypoint={onPreviousArchiveWaypoint}
+            onSelectArchiveWaypoint={onSelectArchiveWaypoint}
+            onSelectTarget={onSelectTarget}
+            onStartArchiveExpedition={onStartArchiveExpedition}
+            onViewArchiveRoute={onViewArchiveRoute}
+          />
         ) : (
           <ViewTab
             controlSensitivity={controlSensitivity}
@@ -1245,6 +1440,7 @@ function getPanelLabel(panel: ActivePanel, copy: (typeof COPY)[Language]) {
   if (panel === "info") return copy.info;
   if (panel === "missions") return copy.missions;
   if (panel === "tour") return copy.tour;
+  if (panel === "archives") return copy.archives;
   return copy.view;
 }
 
@@ -1255,6 +1451,7 @@ function InfoTab({
   selectedTarget,
   viewMode,
   onRelatedItem,
+  onViewArchiveRoute,
   setDetailOpen,
 }: {
   copy: (typeof COPY)[Language];
@@ -1264,9 +1461,11 @@ function InfoTab({
   selectedTarget: SelectedTarget;
   viewMode: ViewMode;
   onRelatedItem: (item: string) => void;
+  onViewArchiveRoute: (missionId: ArchiveMissionId) => void;
   setDetailOpen: (open: boolean) => void;
 }) {
   const info = SPACE_OBJECTS[selectedTarget];
+  const relatedArchives = getArchiveMissionsForTarget(selectedTarget);
 
   return (
     <div>
@@ -1340,12 +1539,31 @@ function InfoTab({
         </div>
       </div>
 
-      <p className="mt-5 border border-white/10 bg-black/30 p-3 text-[11px] leading-5 text-slate-500">
+      <div className="mt-5 border border-white/10 bg-black/30 p-3 text-[11px] leading-5 text-slate-500">
+        {relatedArchives.length > 0 ? (
+          <span className="mb-5 block">
+            <span className="mb-2 block font-semibold uppercase tracking-[0.18em] text-slate-400">
+              {copy.relatedArchives}
+            </span>
+            <span className="grid gap-2">
+              {relatedArchives.slice(0, 6).map((mission) => (
+                <button
+                  key={mission.id}
+                  type="button"
+                  onClick={() => onViewArchiveRoute(mission.id)}
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-left text-[10px] uppercase tracking-[0.14em] text-slate-300 transition hover:border-emerald-300/40 hover:text-emerald-100"
+                >
+                  {mission.name}
+                </button>
+              ))}
+            </span>
+          </span>
+        ) : null}
         <span className="mb-1 block font-semibold uppercase tracking-[0.18em] text-slate-400">
           {copy.sources}
         </span>
         {copy.sourceBody}
-      </p>
+      </div>
     </div>
   );
 }
@@ -1926,6 +2144,336 @@ function TourTab({
   );
 }
 
+function ArchivesTab({
+  archiveExpeditionMode,
+  copy,
+  currentArchiveWaypointIndex,
+  language,
+  selectedArchiveMission,
+  onClearArchiveRoute,
+  onCompleteArchiveExpedition,
+  onFocusArchiveWaypoint,
+  onNextArchiveWaypoint,
+  onPreviousArchiveWaypoint,
+  onSelectArchiveWaypoint,
+  onSelectTarget,
+  onStartArchiveExpedition,
+  onViewArchiveRoute,
+}: {
+  archiveExpeditionMode: ArchiveExpeditionMode;
+  copy: (typeof COPY)[Language];
+  currentArchiveWaypointIndex: number;
+  language: Language;
+  selectedArchiveMission: ArchiveMission | null;
+  onClearArchiveRoute: () => void;
+  onCompleteArchiveExpedition: () => void;
+  onFocusArchiveWaypoint: () => void;
+  onNextArchiveWaypoint: () => void;
+  onPreviousArchiveWaypoint: () => void;
+  onSelectArchiveWaypoint: (index: number) => void;
+  onSelectTarget: (target: SelectedTarget) => void;
+  onStartArchiveExpedition: (missionId?: ArchiveMissionId) => void;
+  onViewArchiveRoute: (missionId: ArchiveMissionId) => void;
+}) {
+  const [categoryFilter, setCategoryFilter] = useState<
+    ArchiveMissionCategory | "all"
+  >("all");
+
+  if (!selectedArchiveMission) {
+    const missions =
+      categoryFilter === "all"
+        ? ARCHIVE_MISSIONS
+        : ARCHIVE_MISSIONS.filter(
+            (mission) => mission.category === categoryFilter,
+          );
+
+    return (
+      <div className="grid gap-3">
+        <div className="border border-cyan-300/20 bg-cyan-950/15 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
+            {copy.archiveCatalog}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-slate-400">
+            {copy.archiveDisclaimer}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              "all",
+              "outer-solar-system",
+              "giant-planets",
+              "mars",
+              "inner-solar-system",
+              "asteroids",
+              "future",
+            ] as Array<ArchiveMissionCategory | "all">
+          ).map((category) => (
+            <button
+              key={category}
+              type="button"
+              onClick={() => setCategoryFilter(category)}
+              className={[
+                "border px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] transition",
+                categoryFilter === category
+                  ? "border-cyan-300/60 bg-cyan-950/35 text-cyan-100"
+                  : "border-white/10 bg-white/[0.03] text-slate-500 hover:border-cyan-300/35 hover:text-slate-200",
+              ].join(" ")}
+            >
+              {ARCHIVE_CATEGORY_LABELS[category][language]}
+            </button>
+          ))}
+        </div>
+        <div className="grid max-h-[62vh] gap-3 overflow-y-auto pr-1">
+          {missions.map((mission) => (
+            <article
+              key={mission.id}
+              className="border border-white/10 bg-white/[0.03] p-3 transition hover:border-cyan-300/30"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-100">
+                    {mission.name}
+                  </h2>
+                  <p className="mt-1 text-xs text-cyan-100/70">
+                    {mission.subtitle}
+                  </p>
+                </div>
+                <span className="border border-white/10 px-2 py-1 text-[8px] uppercase tracking-[0.12em] text-slate-500">
+                  {ARCHIVE_CATEGORY_LABELS[mission.category][language]}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                {mission.shortDescription}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {mission.primaryTargets.map((target) => (
+                  <span
+                    key={target}
+                    className="border border-cyan-300/15 bg-cyan-950/15 px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-cyan-100/75"
+                  >
+                    {SPACE_OBJECTS[target].name[language]}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => onViewArchiveRoute(mission.id)}
+                  className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100 transition hover:border-cyan-200"
+                >
+                  {copy.viewRoute}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onStartArchiveExpedition(mission.id)}
+                  className="border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-100 transition hover:border-emerald-200"
+                >
+                  {copy.startExpedition}
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const currentWaypoint =
+    selectedArchiveMission.waypoints[currentArchiveWaypointIndex] ??
+    selectedArchiveMission.waypoints[0];
+  const discoveries = getDiscoveryCardsForMission(selectedArchiveMission.id);
+  const finalWaypoint =
+    currentArchiveWaypointIndex >= selectedArchiveMission.waypoints.length - 1;
+
+  return (
+    <div className="grid gap-3">
+      <div className="border border-cyan-300/25 bg-cyan-950/16 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
+              {copy.archiveRouteLoaded}
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-white">
+              {selectedArchiveMission.name}
+            </h2>
+            <p className="mt-1 text-xs text-cyan-100/70">
+              {selectedArchiveMission.subtitle}
+            </p>
+          </div>
+          <span className="border border-emerald-300/30 px-2 py-1 text-[8px] uppercase tracking-[0.12em] text-emerald-100">
+            {archiveExpeditionMode}
+          </span>
+        </div>
+        <p className="mt-3 text-xs leading-5 text-slate-300">
+          {selectedArchiveMission.longDescription}
+        </p>
+        <p className="mt-2 text-[11px] leading-5 text-slate-500">
+          {selectedArchiveMission.disclaimer ?? copy.archiveDisclaimer}
+        </p>
+      </div>
+
+      <section className="border border-white/10 bg-white/[0.03] p-3">
+        <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+          {selectedArchiveMission.agencyLabel} ·{" "}
+          {selectedArchiveMission.statusLabel}
+        </p>
+        <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-cyan-100">
+          {copy.primaryTargets}
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {selectedArchiveMission.primaryTargets.map((target) => (
+            <button
+              key={target}
+              type="button"
+              onClick={() => onSelectTarget(target)}
+              className="border border-cyan-300/20 bg-cyan-950/16 px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-cyan-100 transition hover:border-cyan-200"
+            >
+              {SPACE_OBJECTS[target].name[language]}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="border border-white/10 bg-white/[0.03] p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">
+              {copy.waypoint} {currentArchiveWaypointIndex + 1}/
+              {selectedArchiveMission.waypoints.length}
+            </p>
+            <h3 className="mt-2 text-sm font-semibold text-slate-100">
+              {currentWaypoint.label}
+            </h3>
+          </div>
+          <span className="border border-white/10 px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-slate-500">
+            {SPACE_OBJECTS[currentWaypoint.target].name[language]}
+          </span>
+        </div>
+        <p className="mt-2 text-xs leading-5 text-slate-300">
+          {currentWaypoint.description}
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onFocusArchiveWaypoint}
+            className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-100 transition hover:border-cyan-200"
+          >
+            {copy.focusWaypoint}
+          </button>
+          <button
+            type="button"
+            onClick={() => onStartArchiveExpedition(selectedArchiveMission.id)}
+            className="border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-100 transition hover:border-emerald-200"
+          >
+            {copy.startExpedition}
+          </button>
+          <button
+            type="button"
+            onClick={onPreviousArchiveWaypoint}
+            disabled={currentArchiveWaypointIndex === 0}
+            className="border border-white/10 bg-white/[0.03] px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 transition hover:border-cyan-300/35 hover:text-cyan-100 disabled:cursor-not-allowed disabled:text-slate-700"
+          >
+            {copy.previousWaypoint}
+          </button>
+          <button
+            type="button"
+            onClick={onNextArchiveWaypoint}
+            className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-100 transition hover:border-cyan-200"
+          >
+            {finalWaypoint ? copy.completeExpedition : copy.nextWaypoint}
+          </button>
+          {finalWaypoint ? (
+            <button
+              type="button"
+              onClick={onCompleteArchiveExpedition}
+              className="col-span-2 border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-100 transition hover:border-emerald-200"
+            >
+              {copy.completeExpedition}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onClearArchiveRoute}
+            className="col-span-2 border border-white/10 bg-white/[0.03] px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 transition hover:border-red-300/35 hover:text-red-100"
+          >
+            {copy.clearRoute}
+          </button>
+        </div>
+      </section>
+
+      <section className="grid max-h-52 gap-2 overflow-y-auto">
+        {selectedArchiveMission.waypoints.map((waypoint, index) => {
+          const active = index === currentArchiveWaypointIndex;
+
+          return (
+            <button
+              key={waypoint.id}
+              type="button"
+              onClick={() => onSelectArchiveWaypoint(index)}
+              className={[
+                "border p-2 text-left transition",
+                active
+                  ? "border-cyan-300/45 bg-cyan-950/22"
+                  : "border-white/10 bg-white/[0.025] hover:border-cyan-300/30",
+              ].join(" ")}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-slate-200">
+                  {index + 1}. {waypoint.label}
+                </span>
+                <span className="text-[9px] uppercase tracking-[0.14em] text-slate-500">
+                  {SPACE_OBJECTS[waypoint.target].name[language]}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                {waypoint.description}
+              </p>
+            </button>
+          );
+        })}
+      </section>
+
+      <section className="border border-white/10 bg-white/[0.03] p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          {copy.keyDiscoveries}
+        </p>
+        <ul className="mt-3 grid gap-2 text-xs leading-5 text-slate-300">
+          {selectedArchiveMission.keyDiscoveries.map((item) => (
+            <li key={item} className="border-l border-cyan-300/30 pl-3">
+              {item}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="grid gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          {copy.discoveryCards}
+        </p>
+        {discoveries.map((card) => (
+          <button
+            key={card.id}
+            type="button"
+            onClick={() => onSelectTarget(card.relatedTarget)}
+            className="border border-white/10 bg-white/[0.03] p-3 text-left transition hover:border-emerald-300/35"
+          >
+            <span className="block text-sm font-semibold text-slate-100">
+              {card.title}
+            </span>
+            <span className="mt-2 block text-xs leading-5 text-slate-400">
+              {card.body}
+            </span>
+            <span className="mt-2 block text-[9px] uppercase tracking-[0.14em] text-emerald-200">
+              {SPACE_OBJECTS[card.relatedTarget].name[language]}
+            </span>
+          </button>
+        ))}
+      </section>
+    </div>
+  );
+}
+
 function ViewTab({
   controlSensitivity,
   copy,
@@ -1993,6 +2541,7 @@ function ViewTab({
           ["asteroidBelt", copy.showAsteroidBelt],
           ["kuiperBelt", copy.showKuiperBelt],
           ["moons", copy.showMoons],
+          ["missionRoutes", copy.showMissionRoutes],
           ["constellations", copy.showConstellations],
           ["ecliptic", copy.showEcliptic],
           ["zodiac", copy.showZodiac],
@@ -2085,6 +2634,7 @@ function RightToolbar({
   language,
   onFullscreen,
   onOpenLayers,
+  onOpenRoutes,
   onOpenSettings,
   onTriggerCommand,
 }: {
@@ -2092,6 +2642,7 @@ function RightToolbar({
   language: Language;
   onFullscreen: () => void;
   onOpenLayers: () => void;
+  onOpenRoutes: () => void;
   onOpenSettings: () => void;
   onTriggerCommand: (command: CameraCommandType) => void;
 }) {
@@ -2101,6 +2652,7 @@ function RightToolbar({
     title: string;
   }> = [
     { label: language === "zh" ? "视图" : "View", onClick: onOpenLayers, title: "Layers" },
+    { label: copy.routes, onClick: onOpenRoutes, title: "Mission Routes" },
     { label: copy.solarSystemOverview, onClick: () => onTriggerCommand("solarSystemOverview"), title: "Solar System Overview" },
     { label: "+", onClick: () => onTriggerCommand("zoomIn"), title: "Zoom +" },
     { label: "-", onClick: () => onTriggerCommand("zoomOut"), title: "Zoom -" },
@@ -2130,15 +2682,24 @@ function AssistantPanel({
   cameraMode,
   activeTour,
   activeTourStopIndex,
+  archiveExpeditionMode,
   completedMissionIds,
   completedTourStopIds,
   copy,
+  currentArchiveWaypointIndex,
   explorationPoint,
   language,
   missionStepIndex,
+  onClearArchiveRoute,
+  onCompleteArchiveExpedition,
+  onFocusArchiveWaypoint,
+  onNextArchiveWaypoint,
+  onPreviousArchiveWaypoint,
+  onStartArchiveExpedition,
   onCompleteTourStop,
   onFocusTourStop,
   onNextTourStop,
+  selectedArchiveMission,
   selectedMissionId,
   selectedTarget,
   tourMode,
@@ -2147,15 +2708,24 @@ function AssistantPanel({
   cameraMode: CameraMode;
   activeTour: Tour | null;
   activeTourStopIndex: number;
+  archiveExpeditionMode: ArchiveExpeditionMode;
   completedMissionIds: string[];
   completedTourStopIds: string[];
   copy: (typeof COPY)[Language];
+  currentArchiveWaypointIndex: number;
   explorationPoint: ExplorationPoint;
   language: Language;
   missionStepIndex: number;
+  onClearArchiveRoute: () => void;
+  onCompleteArchiveExpedition: () => void;
+  onFocusArchiveWaypoint: () => void;
+  onNextArchiveWaypoint: () => void;
+  onPreviousArchiveWaypoint: () => void;
+  onStartArchiveExpedition: (missionId?: ArchiveMissionId) => void;
   onCompleteTourStop: () => void;
   onFocusTourStop: () => void;
   onNextTourStop: () => void;
+  selectedArchiveMission: ArchiveMission | null;
   selectedMissionId: string | null;
   selectedTarget: SelectedTarget;
   tourMode: TourMode;
@@ -2163,6 +2733,8 @@ function AssistantPanel({
 }) {
   const mission = getMissionById(selectedMissionId);
   const currentTourStop = activeTour?.stops[activeTourStopIndex] ?? null;
+  const currentArchiveWaypoint =
+    selectedArchiveMission?.waypoints[currentArchiveWaypointIndex] ?? null;
   const missionCompleted = mission
     ? completedMissionIds.includes(mission.id)
     : false;
@@ -2193,7 +2765,9 @@ function AssistantPanel({
             {copy.aiTitle}
           </h2>
           <p className="mt-1 text-[9px] uppercase tracking-[0.2em] text-slate-600">
-            {currentTourStop
+            {archiveExpeditionMode === "active" && selectedArchiveMission
+              ? selectedArchiveMission.name
+              : currentTourStop
               ? `${activeTour?.title} ${activeTourStopIndex + 1}/${activeTour?.stops.length}`
               : mission
                 ? mission.title
@@ -2202,7 +2776,86 @@ function AssistantPanel({
         </div>
         <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(110,231,183,0.85)]" />
       </div>
-      {currentTourStop ? (
+      {selectedArchiveMission &&
+      currentArchiveWaypoint &&
+      (archiveExpeditionMode !== "idle" || !currentTourStop) ? (
+        <div className="mt-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-100">
+            {archiveExpeditionMode === "active"
+              ? copy.archiveExpeditionActive
+              : archiveExpeditionMode === "completed"
+                ? copy.archiveExpeditionComplete
+                : copy.archiveRouteLoaded}
+          </p>
+          <h3 className="mt-2 text-sm font-semibold text-slate-100">
+            {selectedArchiveMission.name}
+          </h3>
+          <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-slate-500">
+            {copy.waypoint} {currentArchiveWaypointIndex + 1}/
+            {selectedArchiveMission.waypoints.length} ·{" "}
+            {currentArchiveWaypoint.label}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            {archiveExpeditionMode === "completed"
+              ? `${copy.archiveExpeditionComplete}：${selectedArchiveMission.name}。`
+              : currentArchiveWaypoint.description}
+          </p>
+          <p className="mt-2 text-[11px] leading-5 text-slate-500">
+            {selectedArchiveMission.disclaimer ?? copy.archiveDisclaimer}
+          </p>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={onFocusArchiveWaypoint}
+              className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-cyan-100 transition hover:border-cyan-200"
+            >
+              Focus
+            </button>
+            <button
+              type="button"
+              onClick={onPreviousArchiveWaypoint}
+              disabled={currentArchiveWaypointIndex === 0}
+              className="border border-white/10 bg-white/[0.03] px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-400 transition hover:border-cyan-300/35 hover:text-cyan-100 disabled:cursor-not-allowed disabled:text-slate-700"
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              onClick={onNextArchiveWaypoint}
+              className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-cyan-100 transition hover:border-cyan-200"
+            >
+              Next
+            </button>
+            {archiveExpeditionMode === "idle" ? (
+              <button
+                type="button"
+                onClick={() => onStartArchiveExpedition(selectedArchiveMission.id)}
+                className="col-span-2 border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-emerald-100 transition hover:border-emerald-200"
+              >
+                Start Expedition
+              </button>
+            ) : null}
+            {archiveExpeditionMode === "active" &&
+            currentArchiveWaypointIndex >=
+              selectedArchiveMission.waypoints.length - 1 ? (
+              <button
+                type="button"
+                onClick={onCompleteArchiveExpedition}
+                className="col-span-2 border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-emerald-100 transition hover:border-emerald-200"
+              >
+                Complete
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClearArchiveRoute}
+              className="border border-white/10 bg-white/[0.03] px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-400 transition hover:border-red-300/35 hover:text-red-100"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      ) : currentTourStop ? (
         <div className="mt-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-100">
             {tourMode === "completed" ? "TOUR COMPLETE" : "TOUR ACTIVE"}
@@ -2737,6 +3390,11 @@ function commandToToast(command: CameraCommandType, language: Language) {
 
 function formatLogEvent(type: ExplorationLogEntry["type"]) {
   const labels: Record<ExplorationLogEntry["type"], string> = {
+    archive_expedition_completed: "EXPEDITION COMPLETE",
+    archive_expedition_started: "EXPEDITION STARTED",
+    archive_route_cleared: "ROUTE CLEARED",
+    archive_route_loaded: "ROUTE LOADED",
+    archive_waypoint_locked: "WAYPOINT LOCKED",
     mission_completed: "MISSION COMPLETE",
     mission_started: "MISSION STARTED",
     mission_step: "MISSION STEP",

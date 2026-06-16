@@ -9,6 +9,8 @@ Argonaut is an independent educational prototype for mission-guided solar system
 - Grand Tour route-based exploration
 - Tour Catalog with Grand Tour, Inner Worlds, Giant Planets, and Outer Frontier routes
 - Journey Progress and Captain's Log
+- Mission Archives with simplified spacecraft route visualizations
+- Archive Expeditions, Discovery Cards, and related archive routes by target
 - Complete Solar System Map from Mercury to Neptune
 - Sun, Mercury, Venus, Earth, Moon, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto, and Ceres
 - Asteroid Belt and Kuiper Belt region targets
@@ -26,6 +28,11 @@ Argonaut is an independent educational prototype for mission-guided solar system
 - v0.4 Visual Reality
 - v0.5 Complete Solar System
 - v0.6 Grand Tour
+- v0.7 Mission Archives
+
+## Mission Archives
+
+Archive mission routes are simplified educational visualizations and not precise mission trajectories. They are local static profiles for exploring representative spacecraft expeditions such as Voyager, Cassini, Juno, New Horizons, Parker Solar Probe, Perseverance, Tianwen-1, Galileo, Dawn, and Europa Clipper.
 
 ## Local Textures
 

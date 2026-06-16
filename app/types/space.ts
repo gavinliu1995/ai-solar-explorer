@@ -30,7 +30,7 @@ export type LockBehavior = "fly" | "preserve";
 
 export type ControlSensitivity = "low" | "normal" | "high";
 
-export type ActivePanel = "info" | "missions" | "tour" | "view";
+export type ActivePanel = "info" | "missions" | "tour" | "archives" | "view";
 
 export type ViewMode = "solar-system" | "celestial-sphere";
 
@@ -81,6 +81,7 @@ export type ViewLayerState = {
   ecliptic: boolean;
   kuiperBelt: boolean;
   labels: boolean;
+  missionRoutes: boolean;
   moons: boolean;
   orbits: boolean;
   probes: boolean;
@@ -148,7 +149,68 @@ export type Tour = {
 
 export type TourMode = "idle" | "active" | "completed";
 
+export type ArchiveMissionId =
+  | "voyager-1"
+  | "voyager-2"
+  | "cassini"
+  | "juno"
+  | "new-horizons"
+  | "parker-solar-probe"
+  | "perseverance"
+  | "tianwen-1"
+  | "galileo"
+  | "dawn"
+  | "europa-clipper";
+
+export type ArchiveMissionCategory =
+  | "outer-solar-system"
+  | "giant-planets"
+  | "mars"
+  | "inner-solar-system"
+  | "asteroids"
+  | "future";
+
+export type MissionWaypoint = {
+  id: string;
+  target: SpaceTarget;
+  label: string;
+  description: string;
+  cameraMode?: "overview" | "focus" | "close";
+  requiredLayers?: Partial<ViewLayerState>;
+};
+
+export type ArchiveMission = {
+  id: ArchiveMissionId;
+  name: string;
+  subtitle: string;
+  category: ArchiveMissionCategory;
+  agencyLabel: string;
+  statusLabel: string;
+  shortDescription: string;
+  longDescription: string;
+  primaryTargets: SpaceTarget[];
+  waypoints: MissionWaypoint[];
+  keyDiscoveries: string[];
+  relatedTourIds?: TourId[];
+  disclaimer?: string;
+};
+
+export type ArchiveExpeditionMode = "idle" | "active" | "completed";
+
+export type DiscoveryCard = {
+  id: string;
+  missionId: ArchiveMissionId;
+  title: string;
+  body: string;
+  relatedTarget: SpaceTarget;
+};
+
 export type ExplorationLogEventType =
+  | "archive_route_loaded"
+  | "archive_expedition_started"
+  | "archive_waypoint_locked"
+  | "archive_expedition_completed"
+  | "archive_route_cleared"
   | "tour_started"
   | "tour_stop_focused"
   | "tour_stop_completed"

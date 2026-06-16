@@ -33,6 +33,7 @@ import AsteroidBelt from "./scene/AsteroidBelt";
 import ConstellationLayer from "./scene/ConstellationLayer";
 import EclipticBand from "./scene/EclipticBand";
 import KuiperBelt from "./scene/KuiperBelt";
+import MissionRouteLayer from "./scene/MissionRouteLayer";
 import MoonSystem from "./scene/MoonSystem";
 import OrbitLine from "./scene/OrbitLine";
 import ProbeMarker from "./scene/ProbeMarker";
@@ -42,6 +43,7 @@ import type {
   CameraCommand,
   CameraCommandType,
   CameraMode,
+  ArchiveMission,
   ControlSensitivity,
   ExplorationPoint,
   Language,
@@ -65,7 +67,10 @@ type SolarSystemSceneProps = {
   lockBehavior: LockBehavior;
   onLockTarget: (target: SelectedTarget) => void;
   onNearestTargetChange: (target: SelectedTarget) => void;
+  onSelectArchiveWaypoint: (index: number) => void;
   selectedTarget: SelectedTarget;
+  selectedArchiveMission: ArchiveMission | null;
+  currentArchiveWaypointIndex: number;
   setExplorationPoint: (point: ExplorationPoint) => void;
   viewLayers: ViewLayerState;
   viewMode: ViewMode;
@@ -184,13 +189,28 @@ export default function SolarSystemScene({
   lockBehavior,
   onLockTarget,
   onNearestTargetChange,
+  onSelectArchiveWaypoint,
   selectedTarget,
+  selectedArchiveMission,
+  currentArchiveWaypointIndex,
   setExplorationPoint,
   viewLayers,
   viewMode,
 }: SolarSystemSceneProps) {
   const controlsRef = useRef<OrbitControlsHandle | null>(null);
   const userControlVersionRef = useRef(0);
+  const targetPositionVectors = useMemo(
+    () =>
+      LOCKABLE_TARGETS.reduce(
+        (positions, target) => {
+          const [x, y, z] = TARGET_POSITIONS[target];
+          positions[target] = new Vector3(x, y, z);
+          return positions;
+        },
+        {} as Record<SelectedTarget, Vector3>,
+      ),
+    [],
+  );
 
   return (
     <Canvas
@@ -257,6 +277,15 @@ export default function SolarSystemScene({
         viewLayers={viewLayers}
         viewMode={viewMode}
       />
+      {viewLayers.missionRoutes ? (
+        <MissionRouteLayer
+          currentWaypointIndex={currentArchiveWaypointIndex}
+          mission={selectedArchiveMission}
+          onSelectWaypoint={onSelectArchiveWaypoint}
+          showLabels={viewLayers.labels}
+          targetPositions={targetPositionVectors}
+        />
+      ) : null}
       {viewLayers.probes ? <ProbeLayer /> : null}
       <CameraRig
         cameraCommand={cameraCommand}
