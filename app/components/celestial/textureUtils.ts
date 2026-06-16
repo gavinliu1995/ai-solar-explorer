@@ -342,3 +342,101 @@ export function createSunTexture() {
     drawNoise(context, 768, 384, 0.18, "180,50,0");
   });
 }
+
+export function createCeresTexture() {
+  return createTexture(768, 384, (context) => {
+    context.fillStyle = "#8b8377";
+    context.fillRect(0, 0, 768, 384);
+    drawNoise(context, 768, 384, 0.18, "45,40,36");
+    drawNoise(context, 768, 384, 0.1, "220,210,190");
+
+    [
+      { color: "#5f574f", x: 205, y: 155, width: 70, height: 42, seed: 81 },
+      { color: "#b8ac99", x: 420, y: 212, width: 32, height: 20, seed: 82 },
+      { color: "#6b6258", x: 560, y: 118, width: 54, height: 34, seed: 83 },
+    ].forEach((blob) => drawBlob(context, { ...blob, opacity: 0.58 }));
+
+    for (let index = 0; index < 48; index += 1) {
+      const x = seededUnit(index * 8 + 1) * 768;
+      const y = seededUnit(index * 8 + 2) * 384;
+      const radius = 4 + seededUnit(index * 8 + 3) * 12;
+      context.strokeStyle = `rgba(42,38,34,${0.15 + seededUnit(index * 8 + 4) * 0.18})`;
+      context.lineWidth = 1;
+      context.beginPath();
+      context.arc(x, y, radius, 0, Math.PI * 2);
+      context.stroke();
+    }
+  });
+}
+
+export function createUranusTexture() {
+  return createTexture(768, 384, (context) => {
+    const gradient = context.createLinearGradient(0, 0, 0, 384);
+    gradient.addColorStop(0, "#b9f2f2");
+    gradient.addColorStop(0.5, "#8bd7dd");
+    gradient.addColorStop(1, "#5ca9b9");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 768, 384);
+    drawBands(
+      context,
+      768,
+      384,
+      ["#bff5f2", "#90dbe1", "#a9e9ea", "#74bfcc", "#a2e0e2"],
+      0.22,
+    );
+    drawNoise(context, 768, 384, 0.035, "230,255,255");
+  });
+}
+
+export function createNeptuneTexture() {
+  return createTexture(768, 384, (context) => {
+    const gradient = context.createLinearGradient(0, 0, 0, 384);
+    gradient.addColorStop(0, "#2b68ce");
+    gradient.addColorStop(0.46, "#183c9a");
+    gradient.addColorStop(1, "#091e55");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 768, 384);
+    drawBands(
+      context,
+      768,
+      384,
+      ["#315fbd", "#17377e", "#2b5cb6", "#0d2868", "#3b70d4"],
+      0.24,
+    );
+    drawNoise(context, 768, 384, 0.05, "180,210,255");
+    drawBlob(context, {
+      color: "#1b2f62",
+      height: 22,
+      opacity: 0.46,
+      seed: 91,
+      width: 58,
+      x: 490,
+      y: 218,
+    });
+    drawBlob(context, {
+      color: "#d3e5ff",
+      height: 9,
+      opacity: 0.22,
+      seed: 92,
+      width: 78,
+      x: 310,
+      y: 126,
+    });
+  });
+}
+
+export function createPlutoTexture() {
+  return createTexture(768, 384, (context) => {
+    context.fillStyle = "#9b8873";
+    context.fillRect(0, 0, 768, 384);
+    drawNoise(context, 768, 384, 0.12, "55,45,38");
+    drawNoise(context, 768, 384, 0.08, "240,230,210");
+
+    [
+      { color: "#d7cfc1", x: 340, y: 170, width: 74, height: 52, seed: 101 },
+      { color: "#6f5748", x: 212, y: 236, width: 96, height: 38, seed: 102 },
+      { color: "#bfa98f", x: 560, y: 120, width: 86, height: 34, seed: 103 },
+      { color: "#efe5d1", x: 438, y: 214, width: 32, height: 22, seed: 104 },
+    ].forEach((blob) => drawBlob(context, { ...blob, opacity: 0.58 }));
+  });
+}

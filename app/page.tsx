@@ -57,9 +57,12 @@ export default function Home() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const [viewLayers, setViewLayers] = useState<ViewLayerState>({
+    asteroidBelt: true,
     constellations: false,
     ecliptic: false,
+    kuiperBelt: true,
     labels: true,
+    moons: true,
     orbits: true,
     probes: true,
     stars: true,

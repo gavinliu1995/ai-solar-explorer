@@ -17,16 +17,23 @@ import {
   Vector3,
 } from "three";
 import type { Camera } from "three";
+import Ceres from "./celestial/Ceres";
 import Earth from "./celestial/Earth";
 import Jupiter from "./celestial/Jupiter";
 import Mars from "./celestial/Mars";
 import Mercury from "./celestial/Mercury";
 import Moon from "./celestial/Moon";
+import Neptune from "./celestial/Neptune";
+import Pluto from "./celestial/Pluto";
 import Saturn from "./celestial/Saturn";
 import Sun from "./celestial/Sun";
+import Uranus from "./celestial/Uranus";
 import Venus from "./celestial/Venus";
+import AsteroidBelt from "./scene/AsteroidBelt";
 import ConstellationLayer from "./scene/ConstellationLayer";
 import EclipticBand from "./scene/EclipticBand";
+import KuiperBelt from "./scene/KuiperBelt";
+import MoonSystem from "./scene/MoonSystem";
 import OrbitLine from "./scene/OrbitLine";
 import ProbeMarker from "./scene/ProbeMarker";
 import SpaceLabel from "./scene/SpaceLabel";
@@ -75,31 +82,42 @@ type OrbitSpec = {
   target?: SelectedTarget;
 };
 
-const MERCURY_POSITION: [number, number, number] = [3.6, 0, 0.62];
-const VENUS_POSITION: [number, number, number] = [5.8, 0, -0.92];
 const INITIAL_EARTH_CAMERA_POSITION: [number, number, number] = [7.25, 1.42, 4.18];
 
 const ORBITS: OrbitSpec[] = [
-  { color: "#8b8fa3", opacity: 0.052, radiusX: 3.7, radiusZ: 3.25, rotationY: 0.08, target: "mercury" },
-  { color: "#eabf73", opacity: 0.06, radiusX: 5.95, radiusZ: 5.25, rotationY: -0.1, target: "venus" },
-  { color: "#38bdf8", opacity: 0.08, radiusX: 8.85, radiusZ: 7.95, rotationY: 0.04, target: "earth" },
-  { color: "#fb923c", opacity: 0.06, radiusX: 15.55, radiusZ: 13.7, rotationY: -0.16, target: "mars" },
-  { color: "#94a3b8", opacity: 0.052, radiusX: 21.65, radiusZ: 18.75, rotationY: 0.16, target: "jupiter" },
-  { color: "#7dd3fc", opacity: 0.048, radiusX: 30.05, radiusZ: 25.8, rotationY: -0.14, target: "saturn" },
+  { color: "#8b8fa3", opacity: 0.052, radiusX: 4.0, radiusZ: 3.35, rotationY: 0.08, target: "mercury" },
+  { color: "#eabf73", opacity: 0.058, radiusX: 6.1, radiusZ: 5.3, rotationY: -0.1, target: "venus" },
+  { color: "#38bdf8", opacity: 0.082, radiusX: 8.85, radiusZ: 7.95, rotationY: 0.04, target: "earth" },
+  { color: "#fb923c", opacity: 0.06, radiusX: 12.15, radiusZ: 10.85, rotationY: -0.16, target: "mars" },
+  { color: "#a7a0a0", opacity: 0.042, radiusX: 15.65, radiusZ: 14.2, rotationY: 0.12, target: "ceres" },
+  { color: "#94a3b8", opacity: 0.044, radiusX: 20.4, radiusZ: 18.55, rotationY: 0.16, target: "jupiter" },
+  { color: "#7dd3fc", opacity: 0.04, radiusX: 28.8, radiusZ: 25.6, rotationY: -0.14, target: "saturn" },
+  { color: "#67e8f9", opacity: 0.032, radiusX: 36.4, radiusZ: 32.4, rotationY: 0.22, target: "uranus" },
+  { color: "#60a5fa", opacity: 0.03, radiusX: 44.5, radiusZ: 39.5, rotationY: -0.2, target: "neptune" },
+  { color: "#cbd5e1", opacity: 0.028, radiusX: 55.4, radiusZ: 47.2, rotationY: 0.08, target: "pluto" },
 ];
 
 const CAMERA_OFFSETS: Record<SelectedTarget, Vector3> = {
+  "asteroid-belt": new Vector3(7.5, 5.2, 13.5),
+  "kuiper-belt": new Vector3(24, 18, 34),
+  ceres: new Vector3(0.72, 0.86, 1.78),
   sun: new Vector3(2.2, 2.6, 6.4),
   mercury: new Vector3(0.55, 0.72, 1.58),
   venus: new Vector3(0.72, 1.0, 2.15),
   earth: new Vector3(-1.55, 1.42, 3.58),
   moon: new Vector3(1.05, 1.04, 2.3),
-  mars: new Vector3(1.25, 2.8, 5.25),
-  jupiter: new Vector3(1.2, 7.2, 11.5),
-  saturn: new Vector3(1.6, 7.7, 12.8),
+  mars: new Vector3(1.05, 2.2, 4.5),
+  jupiter: new Vector3(1.2, 6.8, 10.4),
+  saturn: new Vector3(1.6, 7.4, 12.2),
+  uranus: new Vector3(1.2, 4.8, 7.8),
+  neptune: new Vector3(1.2, 4.8, 8.2),
+  pluto: new Vector3(0.72, 0.95, 2.15),
 };
 
 const TARGET_RADII: Record<SelectedTarget, number> = {
+  "asteroid-belt": 15.6,
+  "kuiper-belt": 56,
+  ceres: 0.24,
   sun: 1.45,
   mercury: 0.24,
   venus: 0.42,
@@ -108,10 +126,13 @@ const TARGET_RADII: Record<SelectedTarget, number> = {
   mars: 0.72,
   jupiter: 1.28,
   saturn: 2.5,
+  uranus: 0.86,
+  neptune: 0.88,
+  pluto: 0.26,
 };
 
-const MAX_CAMERA_DISTANCE = 90;
-const MAX_FREE_CAMERA_DISTANCE = 130;
+const MAX_CAMERA_DISTANCE = 190;
+const MAX_FREE_CAMERA_DISTANCE = 230;
 const FREE_KEYBOARD_MOVE_SPEED = 6.8;
 const SENSITIVITY_MULTIPLIERS: Record<ControlSensitivity, number> = {
   low: 0.68,
@@ -132,6 +153,27 @@ const KEYBOARD_NAVIGATION_KEYS = new Set([
   "AltLeft",
   "AltRight",
 ]);
+
+const JUPITER_MOONS = [
+  { angle: 0.25, color: "#e0b36b", distance: 1.75, name: "Io", radius: 0.08 },
+  { angle: 1.45, color: "#d8d8c8", distance: 2.1, name: "Europa", radius: 0.07 },
+  { angle: 2.65, color: "#a78f74", distance: 2.45, name: "Ganymede", radius: 0.09 },
+  { angle: 4.1, color: "#8b8279", distance: 2.78, name: "Callisto", radius: 0.08 },
+];
+
+const SATURN_MOONS = [
+  { angle: 0.72, color: "#d7b36e", distance: 2.95, name: "Titan", radius: 0.09 },
+  { angle: 3.42, color: "#dbeafe", distance: 3.42, name: "Enceladus", radius: 0.055 },
+];
+
+const URANUS_MOONS = [
+  { angle: 1.1, color: "#cbd5e1", distance: 1.55, name: "Titania", radius: 0.055 },
+  { angle: 3.8, color: "#94a3b8", distance: 1.88, name: "Oberon", radius: 0.055 },
+];
+
+const NEPTUNE_MOONS = [
+  { angle: 2.2, color: "#c7d2fe", distance: 1.62, name: "Triton", radius: 0.06 },
+];
 
 export default function SolarSystemScene({
   cameraCommand,
@@ -165,11 +207,11 @@ export default function SolarSystemScene({
       }}
     >
       <color attach="background" args={["#02040a"]} />
-      <fog attach="fog" args={["#02040a", 18, 92]} />
+      <fog attach="fog" args={["#02040a", 24, 168]} />
       <ambientLight intensity={0.2} />
       <pointLight
         color="#ffe7a3"
-        distance={120}
+        distance={190}
         intensity={760}
         position={[0, 0, 0]}
       />
@@ -177,17 +219,17 @@ export default function SolarSystemScene({
       {viewLayers.stars ? (
         <>
           <Stars
-            radius={180}
-            depth={80}
-            count={5200}
+            radius={260}
+            depth={120}
+            count={6200}
             factor={3.6}
             saturation={0}
             fade
             speed={0.08}
           />
           <Stars
-            radius={68}
-            depth={34}
+            radius={96}
+            depth={48}
             count={620}
             factor={6.2}
             saturation={0.1}
@@ -314,6 +356,24 @@ function SolarMap({
         </group>
       ) : null}
 
+      {viewLayers.asteroidBelt ? (
+        <group onDoubleClick={targetDoubleClickHandlers["asteroid-belt"]}>
+          <AsteroidBelt
+            active={selectedTarget === "asteroid-belt"}
+            showLabel={viewLayers.labels}
+          />
+        </group>
+      ) : null}
+
+      {viewLayers.kuiperBelt ? (
+        <group onDoubleClick={targetDoubleClickHandlers["kuiper-belt"]}>
+          <KuiperBelt
+            active={selectedTarget === "kuiper-belt"}
+            showLabel={viewLayers.labels}
+          />
+        </group>
+      ) : null}
+
       <group
         onDoubleClick={targetDoubleClickHandlers.sun}
         scale={selectedTarget === "sun" ? 0.82 : 0.72}
@@ -332,7 +392,7 @@ function SolarMap({
 
       <group
         onDoubleClick={targetDoubleClickHandlers.mercury}
-        position={MERCURY_POSITION}
+        position={TARGET_POSITIONS.mercury}
         scale={selectedTarget === "mercury" ? 1.22 : 1}
       >
         <Mercury position={[0, 0, 0]} />
@@ -341,7 +401,11 @@ function SolarMap({
         <SpaceLabel
           active={selectedTarget === "mercury"}
           muted={selectedTarget !== "mercury"}
-          position={[MERCURY_POSITION[0], 0.82, MERCURY_POSITION[2]]}
+          position={[
+            TARGET_POSITIONS.mercury[0],
+            0.82,
+            TARGET_POSITIONS.mercury[2],
+          ]}
         >
           {labels.mercury}
         </SpaceLabel>
@@ -349,7 +413,7 @@ function SolarMap({
 
       <group
         onDoubleClick={targetDoubleClickHandlers.venus}
-        position={VENUS_POSITION}
+        position={TARGET_POSITIONS.venus}
         scale={selectedTarget === "venus" ? 0.9 : 0.72}
       >
         <Venus position={[0, 0, 0]} />
@@ -358,7 +422,11 @@ function SolarMap({
         <SpaceLabel
           active={selectedTarget === "venus"}
           muted={selectedTarget !== "venus"}
-          position={[VENUS_POSITION[0], 1.05, VENUS_POSITION[2]]}
+          position={[
+            TARGET_POSITIONS.venus[0],
+            1.05,
+            TARGET_POSITIONS.venus[2],
+          ]}
         >
           {labels.venus}
         </SpaceLabel>
@@ -419,6 +487,23 @@ function SolarMap({
       ) : null}
 
       <group
+        onDoubleClick={targetDoubleClickHandlers.ceres}
+        position={TARGET_POSITIONS.ceres}
+        scale={selectedTarget === "ceres" ? 1.28 : 0.92}
+      >
+        <Ceres active={selectedTarget === "ceres"} position={[0, 0, 0]} />
+      </group>
+      {viewLayers.labels ? (
+        <SpaceLabel
+          active={selectedTarget === "ceres"}
+          muted={selectedTarget !== "ceres"}
+          position={[TARGET_POSITIONS.ceres[0], 0.72, TARGET_POSITIONS.ceres[2]]}
+        >
+          {labels.ceres}
+        </SpaceLabel>
+      ) : null}
+
+      <group
         onDoubleClick={targetDoubleClickHandlers.jupiter}
         position={TARGET_POSITIONS.jupiter}
         scale={selectedTarget === "jupiter" ? 1 : 0.68}
@@ -436,6 +521,15 @@ function SolarMap({
         >
           {labels.jupiter}
         </SpaceLabel>
+      ) : null}
+
+      {viewLayers.moons ? (
+        <MoonSystem
+          isActive={selectedTarget === "jupiter"}
+          moons={JUPITER_MOONS}
+          parentPosition={TARGET_POSITIONS.jupiter}
+          showLabels={viewLayers.labels}
+        />
       ) : null}
 
       <group
@@ -457,6 +551,94 @@ function SolarMap({
           {labels.saturn}
         </SpaceLabel>
       ) : null}
+
+      {viewLayers.moons ? (
+        <MoonSystem
+          isActive={selectedTarget === "saturn"}
+          moons={SATURN_MOONS}
+          parentPosition={TARGET_POSITIONS.saturn}
+          showLabels={viewLayers.labels}
+        />
+      ) : null}
+
+      <group
+        onDoubleClick={targetDoubleClickHandlers.uranus}
+        position={TARGET_POSITIONS.uranus}
+        scale={selectedTarget === "uranus" ? 1 : 0.68}
+      >
+        <Uranus
+          active={selectedTarget === "uranus"}
+          position={[0, 0, 0]}
+        />
+      </group>
+      {viewLayers.labels ? (
+        <SpaceLabel
+          active={selectedTarget === "uranus"}
+          muted={selectedTarget !== "uranus"}
+          position={[TARGET_POSITIONS.uranus[0], 1.42, TARGET_POSITIONS.uranus[2]]}
+        >
+          {labels.uranus}
+        </SpaceLabel>
+      ) : null}
+
+      {viewLayers.moons ? (
+        <MoonSystem
+          isActive={selectedTarget === "uranus"}
+          moons={URANUS_MOONS}
+          parentPosition={TARGET_POSITIONS.uranus}
+          showLabels={viewLayers.labels}
+        />
+      ) : null}
+
+      <group
+        onDoubleClick={targetDoubleClickHandlers.neptune}
+        position={TARGET_POSITIONS.neptune}
+        scale={selectedTarget === "neptune" ? 1 : 0.7}
+      >
+        <Neptune
+          active={selectedTarget === "neptune"}
+          position={[0, 0, 0]}
+        />
+      </group>
+      {viewLayers.labels ? (
+        <SpaceLabel
+          active={selectedTarget === "neptune"}
+          muted={selectedTarget !== "neptune"}
+          position={[
+            TARGET_POSITIONS.neptune[0],
+            1.46,
+            TARGET_POSITIONS.neptune[2],
+          ]}
+        >
+          {labels.neptune}
+        </SpaceLabel>
+      ) : null}
+
+      {viewLayers.moons ? (
+        <MoonSystem
+          isActive={selectedTarget === "neptune"}
+          moons={NEPTUNE_MOONS}
+          parentPosition={TARGET_POSITIONS.neptune}
+          showLabels={viewLayers.labels}
+        />
+      ) : null}
+
+      <group
+        onDoubleClick={targetDoubleClickHandlers.pluto}
+        position={TARGET_POSITIONS.pluto}
+        scale={selectedTarget === "pluto" ? 1.28 : 0.92}
+      >
+        <Pluto active={selectedTarget === "pluto"} position={[0, 0, 0]} />
+      </group>
+      {viewLayers.labels ? (
+        <SpaceLabel
+          active={selectedTarget === "pluto"}
+          muted={selectedTarget !== "pluto"}
+          position={[TARGET_POSITIONS.pluto[0], 0.78, TARGET_POSITIONS.pluto[2]]}
+        >
+          {labels.pluto}
+        </SpaceLabel>
+      ) : null}
     </group>
   );
 }
@@ -465,12 +647,12 @@ function ProbeLayer() {
   return (
     <group>
       <ProbeMarker color="#fbbf24" label="Parker Solar Probe" position={[2.15, 0.5, -2.35]} />
-      <ProbeMarker color="#60a5fa" label="Voyager 1" position={[29.2, 0.9, -8.1]} />
-      <ProbeMarker color="#93c5fd" label="Europa Clipper" position={[20.2, 0.8, 4.7]} />
-      <ProbeMarker color="#f97316" label="Perseverance" position={[14.1, 0.68, -1.25]} />
-      <ProbeMarker color="#fda4af" label="Tianwen-1" position={[12.25, 0.74, -3.12]} />
-      <ProbeMarker color="#c4b5fd" label="Lucy" position={[16.4, 0.7, -5.5]} />
-      <ProbeMarker color="#bfdbfe" label="Juno" position={[18.15, 1.04, 2.1]} />
+      <ProbeMarker color="#60a5fa" label="Voyager 1" position={[40.2, 1.1, -24.2]} />
+      <ProbeMarker color="#93c5fd" label="Europa Clipper" position={[-16.1, 0.8, 11.2]} />
+      <ProbeMarker color="#f97316" label="Perseverance" position={[9.4, 0.68, -6.0]} />
+      <ProbeMarker color="#fda4af" label="Tianwen-1" position={[10.85, 0.74, -7.8]} />
+      <ProbeMarker color="#c4b5fd" label="Lucy" position={[14.6, 0.7, 3.5]} />
+      <ProbeMarker color="#bfdbfe" label="Juno" position={[-15.9, 1.04, 8.2]} />
     </group>
   );
 }
@@ -627,9 +809,9 @@ function CameraRig({
           controlsRef.current.update();
         }
         overviewCameraPosition.set(
-          viewMode === "celestial-sphere" ? 42 : 20,
-          viewMode === "celestial-sphere" ? 22 : 10,
-          viewMode === "celestial-sphere" ? 46 : 24,
+          viewMode === "celestial-sphere" ? 58 : 42,
+          viewMode === "celestial-sphere" ? 38 : 26,
+          viewMode === "celestial-sphere" ? 92 : 70,
         );
         commandCameraPosition.copy(
           getCameraCommandPosition({
@@ -788,12 +970,18 @@ function applyZoomCommand({
 }
 
 function getCloseCameraScale(target: SelectedTarget) {
+  if (target === "asteroid-belt") return 0.62;
+  if (target === "kuiper-belt") return 0.74;
   if (target === "sun") return 0.72;
   if (target === "mercury") return 0.52;
   if (target === "venus") return 0.58;
   if (target === "moon") return 0.58;
+  if (target === "ceres") return 0.52;
   if (target === "jupiter") return 0.62;
   if (target === "saturn") return 0.7;
+  if (target === "uranus") return 0.66;
+  if (target === "neptune") return 0.66;
+  if (target === "pluto") return 0.54;
   return 0.55;
 }
 
@@ -856,12 +1044,21 @@ function getMinCameraDistance(target: SelectedTarget) {
   if (target === "mercury") return Math.max(radiusDistance, 0.58);
   if (target === "venus") return Math.max(radiusDistance, 0.95);
   if (target === "moon") return Math.max(radiusDistance, 0.82);
+  if (target === "ceres") return Math.max(radiusDistance, 0.65);
+  if (target === "asteroid-belt") return 10;
+  if (target === "kuiper-belt") return 32;
   if (target === "saturn") return Math.max(radiusDistance, 5.4);
+  if (target === "uranus" || target === "neptune") {
+    return Math.max(radiusDistance, 1.85);
+  }
+  if (target === "pluto") return Math.max(radiusDistance, 0.7);
 
   return Math.max(radiusDistance, 1.35);
 }
 
 function getDynamicZoomSpeed(distanceToTarget: number) {
+  if (distanceToTarget > 80) return 2.7;
+  if (distanceToTarget > 40) return 2.55;
   if (distanceToTarget > 28) return 2.45;
   if (distanceToTarget > 12) return 2.18;
   if (distanceToTarget > 5) return 1.95;

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  MISSIONS,
   getMissionById,
   getMissionSteps,
   getMissionsForTarget,
@@ -30,6 +31,7 @@ import {
   EXPLORATION_LABELS_LOCALIZED,
   LOCKABLE_TARGETS,
   MISSION_TARGETS,
+  MISSION_TARGET_GROUPS,
   TARGET_LABELS_LOCALIZED,
 } from "@/app/types/space";
 
@@ -138,14 +140,17 @@ const COPY = {
     related: "Related",
     resetDone: "Overview restored",
     search: "Search",
-    searchPlaceholder: "Search Sun, Moon, Mars, Saturn...",
+    searchPlaceholder: "Search Neptune, Pluto, Kuiper Belt...",
     settings: "Settings",
     settingsOpened: "Settings opened",
     share: "Share",
     shortcuts: "Keyboard Shortcuts",
     showLabels: "Show Labels",
+    showAsteroidBelt: "Show Asteroid Belt",
     showConstellations: "Show Constellations",
     showEcliptic: "Show Ecliptic Plane",
+    showKuiperBelt: "Show Kuiper Belt",
+    showMoons: "Show Major Moons",
     showOrbits: "Show Orbits",
     showProbes: "Show Probes",
     showStars: "Show Stars",
@@ -224,14 +229,17 @@ const COPY = {
     related: "相关对象",
     resetDone: "总览视角已恢复",
     search: "搜索",
-    searchPlaceholder: "搜索 太阳、月球、火星、土星...",
+    searchPlaceholder: "搜索 海王星、冥王星、柯伊伯带...",
     settings: "设置",
     settingsOpened: "设置面板已打开",
     share: "分享",
     shortcuts: "键盘快捷键",
     showLabels: "显示标签",
+    showAsteroidBelt: "显示小行星带",
     showConstellations: "显示星座线",
     showEcliptic: "显示黄道面",
+    showKuiperBelt: "显示柯伊伯带",
+    showMoons: "显示主要卫星",
     showOrbits: "显示轨道",
     showProbes: "显示探测器",
     showStars: "显示星空",
@@ -264,6 +272,12 @@ const COPY = {
 
 const TARGET_SUGGESTIONS: Record<Language, Record<SelectedTarget, string>> = {
   en: {
+    "asteroid-belt":
+      "Recommendation: map the rocky debris band between Mars and Jupiter and use Ceres as the concrete reference point.",
+    "kuiper-belt":
+      "Recommendation: inspect the icy frontier beyond Neptune as the home region for dwarf planets and comet-like bodies.",
+    ceres:
+      "Recommendation: lock Ceres to understand the largest object embedded inside the asteroid belt.",
     sun:
       "Recommendation: use the Sun as a light-source anchor, then compare the inner planet orbits around it.",
     mercury:
@@ -277,10 +291,21 @@ const TARGET_SUGGESTIONS: Record<Language, Record<SelectedTarget, string>> = {
     mars: "Recommendation: start a Mars terrain scan mission.",
     jupiter:
       "Recommendation: observe Jupiter's cloud bands and immense gas giant scale.",
+    neptune:
+      "Recommendation: observe Neptune's deep blue atmosphere and Triton direction to understand the outer ice giants.",
+    pluto:
+      "Recommendation: treat Pluto as a Kuiper Belt object rather than a classical major planet.",
     saturn:
       "Recommendation: approach Saturn's rings and start a ring-system scan.",
+    uranus:
+      "Recommendation: observe Uranus' tilted rotation axis, one of its most distinctive features.",
   },
   zh: {
+    "asteroid-belt":
+      "建议观察火星与木星之间的小行星带，理解太阳系形成后留下的岩石碎片。",
+    "kuiper-belt":
+      "建议观察海王星外侧的冰体带，它是许多矮行星和彗星的家园。",
+    ceres: "建议锁定谷神星，理解小行星带中最大天体与区域点云的关系。",
     sun: "建议把太阳作为光源锚点，观察内侧行星轨道围绕它展开的关系。",
     mercury: "建议观察水星作为最内侧岩质行星的尺度和近太阳光照环境。",
     venus: "建议观察金星云层，并把它与地球作为类地行星进行对比。",
@@ -288,7 +313,10 @@ const TARGET_SUGGESTIONS: Record<Language, Record<SelectedTarget, string>> = {
     moon: "建议观察月海，并以地球方向作为导航参考。",
     mars: "建议启动火星地貌扫描任务。",
     jupiter: "建议观察木星云带和巨大尺度。",
+    neptune: "建议观察海王星深蓝色大气和 Triton 方向，理解外太阳系冰巨星。",
+    pluto: "建议把冥王星作为柯伊伯带天体观察，而不是传统九大行星。",
     saturn: "建议靠近土星环，启动环系统扫描。",
+    uranus: "建议观察天王星倾斜的自转轴，这是它最独特的特征之一。",
   },
 };
 
@@ -511,6 +539,7 @@ export default function Hud({
       <MissionTargets
         cameraMode={cameraMode}
         copy={copy}
+        hudMode={hudMode}
         language={language}
         selectedTarget={selectedTarget}
         simMode={simMode}
@@ -1194,11 +1223,7 @@ function MissionsTab({
     ? completedMissionIds.includes(selectedMission.id)
     : false;
   const completedCount = completedMissionIds.length;
-  const totalCount = getMissionsForTarget("earth").length +
-    getMissionsForTarget("moon").length +
-    getMissionsForTarget("mars").length +
-    getMissionsForTarget("jupiter").length +
-    getMissionsForTarget("saturn").length;
+  const totalCount = MISSIONS.length;
 
   return (
     <div className="grid gap-3">
@@ -1575,6 +1600,9 @@ function ViewTab({
           ["labels", copy.showLabels],
           ["probes", copy.showProbes],
           ["stars", copy.showStars],
+          ["asteroidBelt", copy.showAsteroidBelt],
+          ["kuiperBelt", copy.showKuiperBelt],
+          ["moons", copy.showMoons],
           ["constellations", copy.showConstellations],
           ["ecliptic", copy.showEcliptic],
           ["zodiac", copy.showZodiac],
@@ -1817,6 +1845,7 @@ function getAssistantMessage({
 function MissionTargets({
   cameraMode,
   copy,
+  hudMode,
   language,
   selectedTarget,
   simMode,
@@ -1824,6 +1853,7 @@ function MissionTargets({
 }: {
   cameraMode: CameraMode;
   copy: (typeof COPY)[Language];
+  hudMode: HudMode;
   language: Language;
   selectedTarget: SelectedTarget;
   simMode: SimMode;
@@ -1831,6 +1861,23 @@ function MissionTargets({
 }) {
   const labels = TARGET_LABELS_LOCALIZED[language];
   const [collapsed, setCollapsed] = useState(false);
+  const minimalTargets: SelectedTarget[] = [
+    "earth",
+    "mars",
+    "jupiter",
+    "saturn",
+    "neptune",
+  ];
+  const groups =
+    hudMode === "minimal"
+      ? [
+          {
+            id: "minimal",
+            label: { en: "Quick Targets", zh: "快捷目标" },
+            targets: minimalTargets,
+          },
+        ]
+      : MISSION_TARGET_GROUPS;
 
   if (collapsed) {
     return (
@@ -1848,7 +1895,14 @@ function MissionTargets({
   }
 
   return (
-    <nav className="pointer-events-auto absolute bottom-28 left-4 w-[min(92vw,760px)] border border-white/10 bg-black/56 p-3 backdrop-blur-xl">
+    <nav
+      className={[
+        "pointer-events-auto absolute left-4 border border-white/10 bg-black/56 p-3 backdrop-blur-xl",
+        hudMode === "minimal"
+          ? "bottom-20 w-[min(92vw,760px)]"
+          : "bottom-28 max-h-[260px] w-[min(92vw,820px)] overflow-y-auto",
+      ].join(" ")}
+    >
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">
@@ -1871,31 +1925,47 @@ function MissionTargets({
           </button>
         </div>
       </div>
-      <div className="-mx-1 overflow-x-auto pb-1">
-        <div className="flex min-w-max gap-2 px-1">
-          {LOCKABLE_TARGETS.map((target) => {
-            const isActive = selectedTarget === target;
-            const hasMissions = MISSION_TARGETS.includes(target);
+      <div className="grid gap-3">
+        {groups.map((group) => (
+          <section key={group.id}>
+            {hudMode === "full" ? (
+              <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                {group.label[language]}
+              </p>
+            ) : null}
+            <div
+              className={[
+                "grid gap-2",
+                hudMode === "minimal"
+                  ? "grid-cols-5"
+                  : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
+              ].join(" ")}
+            >
+              {group.targets.map((target) => {
+                const isActive = selectedTarget === target;
+                const hasMissions = MISSION_TARGETS.includes(target);
 
-            return (
-              <button
-                key={target}
-                type="button"
-                onClick={() => setSelectedTarget(target)}
-                className={[
-                  "h-12 min-w-32 border px-3 text-[10px] font-semibold uppercase tracking-[0.14em] transition active:scale-[0.98]",
-                  isActive
-                    ? "border-cyan-300 bg-cyan-950/40 text-cyan-100 shadow-[0_0_20px_rgba(34,211,238,0.22)]"
-                    : hasMissions
-                      ? "border-white/10 bg-white/[0.03] text-slate-400 hover:border-cyan-300/35 hover:text-slate-100"
-                      : "border-white/10 bg-white/[0.02] text-slate-500 hover:border-cyan-300/30 hover:text-slate-200",
-                ].join(" ")}
-              >
-                {labels[target]}
-              </button>
-            );
-          })}
-        </div>
+                return (
+                  <button
+                    key={target}
+                    type="button"
+                    onClick={() => setSelectedTarget(target)}
+                    className={[
+                      "min-h-11 border px-3 text-[10px] font-semibold uppercase tracking-[0.14em] transition active:scale-[0.98]",
+                      isActive
+                        ? "border-cyan-300 bg-cyan-950/40 text-cyan-100 shadow-[0_0_20px_rgba(34,211,238,0.22)]"
+                        : hasMissions
+                          ? "border-white/10 bg-white/[0.03] text-slate-400 hover:border-cyan-300/35 hover:text-slate-100"
+                          : "border-white/10 bg-white/[0.02] text-slate-500 hover:border-cyan-300/30 hover:text-slate-200",
+                    ].join(" ")}
+                  >
+                    {labels[target]}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
       </div>
     </nav>
   );

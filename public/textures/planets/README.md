@@ -12,9 +12,23 @@ The app supports these filenames:
 - `jupiter.jpg`
 - `saturn.jpg`
 - `saturn_ring.png`
+- `uranus.jpg`
+- `neptune.jpg`
+- `pluto.jpg`
+- `ceres.jpg`
 - `sun.jpg` (optional)
 - `venus.jpg` (optional)
 - `mercury.jpg` (optional)
+
+Optional future moon textures:
+
+- `io.jpg`
+- `europa.jpg`
+- `ganymede.jpg`
+- `callisto.jpg`
+- `titan.jpg`
+- `enceladus.jpg`
+- `triton.jpg`
 
 If a file is missing, the scene safely falls back to procedural materials. The
 Canvas should continue to render even when this directory is empty.
@@ -29,6 +43,9 @@ Texture source notes:
 - If replacing these files, prefer NASA / JPL public resources, NASA 3D
   Resources, Solar System Scope textures, or other clearly licensed educational
   visualization assets.
+- These files are optional. If a texture is absent or fails to load, Argonaut
+  uses procedural fallback materials for the target surface.
+- Do not use unknown images or assets with unclear copyright restrictions.
 - Do not use NASA logos, NASA mission branding, or language implying NASA
   affiliation or endorsement.
 

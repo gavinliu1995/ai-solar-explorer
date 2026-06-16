@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Argonaut / 寰宇星舟
+
+Argonaut is an independent educational prototype for mission-guided solar system exploration.
+
+## Features
+
+- Mission Control deep-space console
+- Mission Experience Loop with guided steps, completion feedback, and Exploration Log
+- Complete Solar System Map from Mercury to Neptune
+- Sun, Mercury, Venus, Earth, Moon, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto, and Ceres
+- Asteroid Belt and Kuiper Belt region targets
+- Major Moon Systems for Jupiter, Saturn, Uranus, and Neptune
+- Solar System / Celestial Sphere modes
+- Constellation layer, ecliptic plane, and zodiac markers
+- Local texture loading with procedural fallback materials
+
+## Local Textures
+
+Optional texture files live in `public/textures/planets/`. If a file is missing, Argonaut falls back to procedural materials and the scene should continue to render.
+
+Visual references may use public NASA/JPL resources or local educational textures. Argonaut is an independent educational prototype and is not affiliated with or endorsed by NASA.
+
+视觉贴图可使用公开 NASA/JPL 资源或本地教育用途贴图。寰宇星舟是独立教育原型，不隶属于 NASA，也不代表 NASA 背书。
+
+Do not use NASA logos or language implying NASA affiliation, authorization, or endorsement.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Validation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm lint
+pnpm exec tsc --noEmit
+pnpm build
+```
