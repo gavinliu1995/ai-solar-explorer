@@ -25,6 +25,7 @@ import type {
   SelectedTarget,
   SimMode,
   ViewLayerState,
+  ViewMode,
 } from "./types/space";
 
 const SolarSystemScene = dynamic(
@@ -56,11 +57,15 @@ export default function Home() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const [viewLayers, setViewLayers] = useState<ViewLayerState>({
+    constellations: false,
+    ecliptic: false,
     labels: true,
     orbits: true,
     probes: true,
     stars: true,
+    zodiac: false,
   });
+  const [viewMode, setViewMode] = useState<ViewMode>("solar-system");
   const [simMode, setSimMode] = useState<SimMode>("CRUISE MODE");
   const [cameraCommand, setCameraCommand] = useState<CameraCommand>(null);
   const [welcomeOpen, setWelcomeOpen] = useState(true);
@@ -127,6 +132,36 @@ export default function Home() {
     setWelcomeOpen(false);
   }
 
+  function handleSetViewMode(mode: ViewMode) {
+    setViewMode(mode);
+
+    if (mode === "celestial-sphere") {
+      setViewLayers((currentLayers) => ({
+        ...currentLayers,
+        constellations: true,
+        ecliptic: true,
+        zodiac: true,
+      }));
+      issueCameraCommand("overview");
+      return;
+    }
+
+    issueCameraCommand("focus");
+  }
+
+  function applyMissionViewContext(mission: Mission) {
+    if (mission.requiresViewMode) {
+      setViewMode(mission.requiresViewMode);
+    }
+
+    if (mission.requiredLayers) {
+      setViewLayers((currentLayers) => ({
+        ...currentLayers,
+        ...mission.requiredLayers,
+      }));
+    }
+  }
+
   function handleSelectTarget(target: SelectedTarget) {
     setLockBehavior("fly");
     setSelectedTarget(target);
@@ -182,6 +217,7 @@ export default function Home() {
     setCameraMode("locked");
     setLockBehavior("fly");
     setActivePanel("missions");
+    applyMissionViewContext(mission);
     dismissWelcome();
     addExplorationLog(
       mission.id,
@@ -228,6 +264,17 @@ export default function Home() {
 
     if (currentStep.target) {
       setSelectedTarget(currentStep.target);
+    }
+
+    if (currentStep.viewMode) {
+      setViewMode(currentStep.viewMode);
+    }
+
+    if (currentStep.requiredLayers) {
+      setViewLayers((currentLayers) => ({
+        ...currentLayers,
+        ...currentStep.requiredLayers,
+      }));
     }
 
     setExplorationPoint(currentStep.explorationPoint ?? null);
@@ -358,6 +405,7 @@ export default function Home() {
         selectedTarget={selectedTarget}
         setExplorationPoint={handleExplorationPointChange}
         viewLayers={viewLayers}
+        viewMode={viewMode}
       />
       <Hud
         activePanel={activePanel}
@@ -378,6 +426,7 @@ export default function Home() {
         shareToast={shareToast}
         simMode={simMode}
         viewLayers={viewLayers}
+        viewMode={viewMode}
         welcomeOpen={welcomeOpen}
         onAdvanceMissionStep={handleAdvanceMissionStep}
         onCameraCommand={issueCameraCommand}
@@ -403,6 +452,7 @@ export default function Home() {
         setSelectedTarget={handleSelectTarget}
         setSimMode={setSimMode}
         setViewLayers={setViewLayers}
+        setViewMode={handleSetViewMode}
       />
     </main>
   );

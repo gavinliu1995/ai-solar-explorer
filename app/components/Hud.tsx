@@ -23,6 +23,7 @@ import type {
   SelectedTarget,
   SimMode,
   ViewLayerState,
+  ViewMode,
 } from "@/app/types/space";
 import {
   EXPLORATION_DETAILS_LOCALIZED,
@@ -49,6 +50,7 @@ type HudProps = {
   shareToast: string | null;
   simMode: SimMode;
   viewLayers: ViewLayerState;
+  viewMode: ViewMode;
   welcomeOpen: boolean;
   onAdvanceMissionStep: () => void;
   onCameraCommand: (command: CameraCommandType) => void;
@@ -74,6 +76,7 @@ type HudProps = {
   setSelectedTarget: (target: SelectedTarget) => void;
   setSimMode: (mode: SimMode) => void;
   setViewLayers: (layers: ViewLayerState) => void;
+  setViewMode: (mode: ViewMode) => void;
 };
 
 const TARGET_OPTIONS: SelectedTarget[] = [
@@ -99,6 +102,12 @@ const COPY = {
     autoCruise: "Auto Cruise",
     close: "Close",
     completed: "completed",
+    celestialContext: "Celestial Context",
+    celestialContextBody:
+      "Celestial Sphere mode shows constellations, the ecliptic, and observation-direction references. It helps connect solar system orbits with the night-sky background.",
+    celestialSphere: "Celestial Sphere",
+    celestialModeMessage:
+      "Celestial reference mode is active. Constellation lines show direction patterns seen from near Earth; they do not mean those stars are physically close together.",
     currentTarget: "Current Target",
     detail: "Detail",
     distance: "Distance",
@@ -127,6 +136,7 @@ const COPY = {
     missions: "Missions",
     nextMission: "Next Recommended Mission",
     objectBrowser: "Object Browser",
+    openPanel: "Open Panel",
     paused: "Paused",
     readMore: "Read More",
     related: "Related",
@@ -138,10 +148,14 @@ const COPY = {
     share: "Share",
     shortcuts: "Keyboard Shortcuts",
     showLabels: "Show Labels",
+    showConstellations: "Show Constellations",
+    showEcliptic: "Show Ecliptic Plane",
     showOrbits: "Show Orbits",
     showProbes: "Show Probes",
     showStars: "Show Stars",
+    showZodiac: "Show Zodiac Markers",
     simMode: "Simulation Mode",
+    solarSystemMode: "Solar System",
     sourceBody:
       "Visual references may use public NASA/JPL resources or local educational textures. This prototype is not affiliated with or endorsed by NASA.",
     sources: "Sources / Credits",
@@ -153,6 +167,7 @@ const COPY = {
     stats: "Stats",
     type: "Type",
     view: "View",
+    viewMode: "View Mode",
     welcomeBody:
       "Begin with one guided mission. Mission Control will give you three steps, track progress, and write your observations into the Exploration Log.",
     welcomeSkip: "Explore Freely",
@@ -169,6 +184,12 @@ const COPY = {
     autoCruise: "自动巡航",
     close: "关闭",
     completed: "已完成",
+    celestialContext: "Celestial Context",
+    celestialContextBody:
+      "天球模式用于显示星座、黄道和观测方向参考。它帮助你理解太阳系轨道与夜空背景之间的关系。",
+    celestialSphere: "Celestial Sphere",
+    celestialModeMessage:
+      "已进入天球参考模式。星座线展示的是从地球附近观察到的方向图案，并不代表恒星之间真实距离相近。",
     currentTarget: "当前目标",
     detail: "详情",
     distance: "距离",
@@ -196,6 +217,7 @@ const COPY = {
     missions: "任务",
     nextMission: "推荐下一任务",
     objectBrowser: "目标浏览器",
+    openPanel: "打开面板",
     paused: "暂停",
     readMore: "查看详情",
     related: "相关对象",
@@ -207,10 +229,14 @@ const COPY = {
     share: "分享",
     shortcuts: "键盘快捷键",
     showLabels: "显示标签",
+    showConstellations: "显示星座线",
+    showEcliptic: "显示黄道面",
     showOrbits: "显示轨道",
     showProbes: "显示探测器",
     showStars: "显示星空",
+    showZodiac: "显示黄道星座",
     simMode: "模拟模式",
+    solarSystemMode: "Solar System",
     sourceBody:
       "视觉参考可能使用 NASA/JPL 公开资源或本地教育纹理。本项目与 NASA 无隶属关系，也不代表 NASA 背书。",
     sources: "来源 / 署名",
@@ -222,6 +248,7 @@ const COPY = {
     stats: "参数",
     type: "类型",
     view: "视图",
+    viewMode: "视图模式",
     welcomeBody:
       "先完成一个引导任务。Mission Control 会给你 3 个步骤，记录进度，并把观察结果写入 Exploration Log。",
     welcomeSkip: "先自由探索",
@@ -271,6 +298,7 @@ export default function Hud({
   shareToast,
   simMode,
   viewLayers,
+  viewMode,
   welcomeOpen,
   onAdvanceMissionStep,
   onCameraCommand,
@@ -296,6 +324,7 @@ export default function Hud({
   setSelectedTarget,
   setSimMode,
   setViewLayers,
+  setViewMode,
 }: HudProps) {
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -419,6 +448,7 @@ export default function Hud({
             selectedTarget={selectedTarget}
             simMode={simMode}
             viewLayers={viewLayers}
+            viewMode={viewMode}
             onAdvanceMissionStep={onAdvanceMissionStep}
             onCompleteMission={onCompleteMission}
             onRelatedItem={onRelatedItem}
@@ -429,6 +459,7 @@ export default function Hud({
             setDetailOpen={setDetailOpen}
             setSimMode={setSimMode}
             setViewLayers={setViewLayers}
+            setViewMode={setViewMode}
           />
           <RightToolbar
             copy={copy}
@@ -450,6 +481,7 @@ export default function Hud({
             missionStepIndex={missionStepIndex}
             selectedMissionId={selectedMissionId}
             selectedTarget={selectedTarget}
+            viewMode={viewMode}
           />
           <SubtleCrosshair />
           {detailOpen ? (
@@ -479,6 +511,7 @@ export default function Hud({
           language={language}
           selectedTarget={selectedTarget}
           simMode={simMode}
+          viewMode={viewMode}
           onCycleSimMode={cycleSimMode}
         />
       ) : (
@@ -488,6 +521,7 @@ export default function Hud({
           language={language}
           selectedTarget={selectedTarget}
           simMode={simMode}
+          viewMode={viewMode}
         />
       )}
 
@@ -882,6 +916,7 @@ function LeftPanel({
   selectedTarget,
   simMode,
   viewLayers,
+  viewMode,
   onAdvanceMissionStep,
   onCompleteMission,
   onRelatedItem,
@@ -892,6 +927,7 @@ function LeftPanel({
   setDetailOpen,
   setSimMode,
   setViewLayers,
+  setViewMode,
 }: {
   activePanel: ActivePanel;
   collapsed: boolean;
@@ -908,6 +944,7 @@ function LeftPanel({
   selectedTarget: SelectedTarget;
   simMode: SimMode;
   viewLayers: ViewLayerState;
+  viewMode: ViewMode;
   onAdvanceMissionStep: () => void;
   onCompleteMission: (missionId: string) => void;
   onRelatedItem: (item: string) => void;
@@ -918,6 +955,7 @@ function LeftPanel({
   setDetailOpen: (open: boolean) => void;
   setSimMode: (mode: SimMode) => void;
   setViewLayers: (layers: ViewLayerState) => void;
+  setViewMode: (mode: ViewMode) => void;
 }) {
   if (collapsed) {
     return (
@@ -927,7 +965,7 @@ function LeftPanel({
         className="pointer-events-auto absolute left-4 top-20 border border-cyan-300/55 bg-black/65 px-3 py-7 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.18)] backdrop-blur-xl transition hover:border-cyan-200 hover:bg-cyan-950/35"
         style={{ writingMode: "vertical-rl" }}
       >
-        {copy.objectBrowser}
+        {copy.openPanel}
       </button>
     );
   }
@@ -973,6 +1011,7 @@ function LeftPanel({
             explorationPoint={explorationPoint}
             language={language}
             selectedTarget={selectedTarget}
+            viewMode={viewMode}
             onRelatedItem={onRelatedItem}
             setDetailOpen={setDetailOpen}
           />
@@ -995,9 +1034,11 @@ function LeftPanel({
             copy={copy}
             simMode={simMode}
             viewLayers={viewLayers}
+            viewMode={viewMode}
             setControlSensitivity={setControlSensitivity}
             setSimMode={setSimMode}
             setViewLayers={setViewLayers}
+            setViewMode={setViewMode}
           />
         )}
       </div>
@@ -1016,6 +1057,7 @@ function InfoTab({
   explorationPoint,
   language,
   selectedTarget,
+  viewMode,
   onRelatedItem,
   setDetailOpen,
 }: {
@@ -1024,6 +1066,7 @@ function InfoTab({
   explorationPoint: ExplorationPoint;
   language: Language;
   selectedTarget: SelectedTarget;
+  viewMode: ViewMode;
   onRelatedItem: (item: string) => void;
   setDetailOpen: (open: boolean) => void;
 }) {
@@ -1063,6 +1106,17 @@ function InfoTab({
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">
             {EXPLORATION_DETAILS_LOCALIZED[language][explorationPoint]}
+          </p>
+        </div>
+      ) : null}
+
+      {viewMode === "celestial-sphere" ? (
+        <div className="mt-4 border border-cyan-300/20 bg-cyan-950/15 p-3">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-cyan-100">
+            {copy.celestialContext}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            {copy.celestialContextBody}
           </p>
         </div>
       ) : null}
@@ -1449,26 +1503,60 @@ function ViewTab({
   copy,
   simMode,
   viewLayers,
+  viewMode,
   setControlSensitivity,
   setSimMode,
   setViewLayers,
+  setViewMode,
 }: {
   controlSensitivity: ControlSensitivity;
   copy: (typeof COPY)[Language];
   simMode: SimMode;
   viewLayers: ViewLayerState;
+  viewMode: ViewMode;
   setControlSensitivity: (sensitivity: ControlSensitivity) => void;
   setSimMode: (mode: SimMode) => void;
   setViewLayers: (layers: ViewLayerState) => void;
+  setViewMode: (mode: ViewMode) => void;
 }) {
   return (
     <div className="grid gap-3 text-sm text-slate-300">
+      <div className="border border-white/10 bg-white/[0.03] p-3">
+        <p className="mb-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
+          {copy.viewMode}
+        </p>
+        <div className="grid grid-cols-2 gap-1">
+          {(
+            [
+              ["solar-system", copy.solarSystemMode],
+              ["celestial-sphere", copy.celestialSphere],
+            ] as Array<[ViewMode, string]>
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setViewMode(mode)}
+              className={[
+                "border px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] transition",
+                viewMode === mode
+                  ? "border-cyan-300/60 bg-cyan-950/40 text-cyan-100"
+                  : "border-white/10 bg-black/20 text-slate-500 hover:border-cyan-300/35 hover:text-slate-200",
+              ].join(" ")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
       {(
         [
           ["orbits", copy.showOrbits],
           ["labels", copy.showLabels],
           ["probes", copy.showProbes],
           ["stars", copy.showStars],
+          ["constellations", copy.showConstellations],
+          ["ecliptic", copy.showEcliptic],
+          ["zodiac", copy.showZodiac],
         ] as Array<[keyof ViewLayerState, string]>
       ).map(([key, label]) => (
         <button
@@ -1573,7 +1661,7 @@ function RightToolbar({
     onClick: () => void;
     title: string;
   }> = [
-    { label: language === "zh" ? "图层" : "Layers", onClick: onOpenLayers, title: "Layers" },
+    { label: language === "zh" ? "视图" : "View", onClick: onOpenLayers, title: "Layers" },
     { label: "+", onClick: () => onTriggerCommand("zoomIn"), title: "Zoom +" },
     { label: "-", onClick: () => onTriggerCommand("zoomOut"), title: "Zoom -" },
     { label: language === "zh" ? "聚焦" : "Focus", onClick: () => onTriggerCommand("focus"), title: "Focus" },
@@ -1607,6 +1695,7 @@ function AssistantPanel({
   missionStepIndex,
   selectedMissionId,
   selectedTarget,
+  viewMode,
 }: {
   cameraMode: CameraMode;
   completedMissionIds: string[];
@@ -1616,6 +1705,7 @@ function AssistantPanel({
   missionStepIndex: number;
   selectedMissionId: string | null;
   selectedTarget: SelectedTarget;
+  viewMode: ViewMode;
 }) {
   const mission = getMissionById(selectedMissionId);
   const missionCompleted = mission
@@ -1630,6 +1720,7 @@ function AssistantPanel({
     mission,
     missionStepIndex,
     selectedTarget,
+    viewMode,
   });
 
   return (
@@ -1659,6 +1750,7 @@ function getAssistantMessage({
   mission,
   missionStepIndex,
   selectedTarget,
+  viewMode,
 }: {
   cameraMode: CameraMode;
   completed: boolean;
@@ -1668,6 +1760,7 @@ function getAssistantMessage({
   mission: Mission | null;
   missionStepIndex: number;
   selectedTarget: SelectedTarget;
+  viewMode: ViewMode;
 }) {
   if (cameraMode === "free") return copy.freeInstruction;
 
@@ -1679,11 +1772,22 @@ function getAssistantMessage({
       return `${copy.missionComplete}：${mission.title}。${copy.nextMission} 已在 Mission Board 中准备好。`;
     }
 
-    return `Step ${Math.min(missionStepIndex + 1, steps.length)}/3：${currentStep.instruction}`;
+    const celestialPrefix =
+      mission.category === "celestial" &&
+      !currentStep.instruction.includes("天球参考层") &&
+      !currentStep.instruction.includes("Celestial")
+        ? "本任务使用天球参考层。请注意：星座是观测方向上的图案，不是可以像行星一样飞抵的地点。"
+        : "";
+
+    return `Step ${Math.min(missionStepIndex + 1, steps.length)}/3：${celestialPrefix}${currentStep.instruction}`;
   }
 
   if (explorationPoint) {
     return EXPLORATION_DETAILS_LOCALIZED[language][explorationPoint];
+  }
+
+  if (viewMode === "celestial-sphere") {
+    return copy.celestialModeMessage;
   }
 
   return TARGET_SUGGESTIONS[language][selectedTarget];
@@ -1747,6 +1851,7 @@ function BottomTimeline({
   language,
   selectedTarget,
   simMode,
+  viewMode,
   onCycleSimMode,
 }: {
   cameraMode: CameraMode;
@@ -1754,9 +1859,12 @@ function BottomTimeline({
   language: Language;
   selectedTarget: SelectedTarget;
   simMode: SimMode;
+  viewMode: ViewMode;
   onCycleSimMode: () => void;
 }) {
   const targetLabel = TARGET_LABELS_LOCALIZED[language][selectedTarget];
+  const viewModeLabel =
+    viewMode === "celestial-sphere" ? copy.celestialSphere : copy.solarSystemMode;
 
   return (
     <footer className="pointer-events-auto absolute bottom-4 left-1/2 flex w-[min(72vw,760px)] -translate-x-1/2 items-center justify-between border border-white/10 bg-black/62 px-4 py-3 text-xs backdrop-blur-xl">
@@ -1771,6 +1879,9 @@ function BottomTimeline({
       <div className="flex items-center gap-4 text-slate-300">
         <span className="hidden uppercase tracking-[0.16em] sm:inline">
           {cameraMode === "free" ? copy.freeExplore : simMode}
+        </span>
+        <span className="hidden uppercase tracking-[0.16em] text-cyan-100/70 lg:inline">
+          {viewModeLabel}
         </span>
         <button
           type="button"
@@ -1802,14 +1913,18 @@ function MinimalStatus({
   language,
   selectedTarget,
   simMode,
+  viewMode,
 }: {
   cameraMode: CameraMode;
   copy: (typeof COPY)[Language];
   language: Language;
   selectedTarget: SelectedTarget;
   simMode: SimMode;
+  viewMode: ViewMode;
 }) {
   const targetLabel = TARGET_LABELS_LOCALIZED[language][selectedTarget];
+  const viewModeLabel =
+    viewMode === "celestial-sphere" ? copy.celestialSphere : copy.solarSystemMode;
 
   return (
     <footer className="pointer-events-auto absolute bottom-4 left-1/2 flex w-[min(82vw,620px)] -translate-x-1/2 items-center justify-between border border-white/10 bg-black/50 px-4 py-2 text-[11px] backdrop-blur-xl">
@@ -1819,6 +1934,9 @@ function MinimalStatus({
       </div>
       <span className="uppercase tracking-[0.16em] text-slate-300">
         {targetLabel} / {cameraMode === "free" ? copy.freeExplore : simMode}
+      </span>
+      <span className="hidden uppercase tracking-[0.16em] text-cyan-100/70 sm:inline">
+        {viewModeLabel}
       </span>
       <span className="font-mono text-slate-400">02:33:02 PM</span>
     </footer>

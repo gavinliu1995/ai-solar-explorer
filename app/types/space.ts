@@ -18,11 +18,16 @@ export type ControlSensitivity = "low" | "normal" | "high";
 
 export type ActivePanel = "info" | "missions" | "view";
 
+export type ViewMode = "solar-system" | "celestial-sphere";
+
 export type ViewLayerState = {
+  constellations: boolean;
+  ecliptic: boolean;
   labels: boolean;
   orbits: boolean;
   probes: boolean;
   stars: boolean;
+  zodiac: boolean;
 };
 
 export type MissionStatus = "locked" | "active" | "completed";
@@ -35,9 +40,12 @@ export type MissionStep = {
   cameraCommand?: CameraCommandType;
   target?: SpaceTarget;
   explorationPoint?: MarsExplorationPoint;
+  viewMode?: ViewMode;
+  requiredLayers?: Partial<ViewLayerState>;
 };
 
 export type Mission = {
+  category?: "planetary" | "celestial";
   id: string;
   target: SpaceTarget;
   title: string;
@@ -46,6 +54,8 @@ export type Mission = {
   status: MissionStatus;
   focusTarget?: SpaceTarget;
   explorationPoint?: MarsExplorationPoint;
+  requiredLayers?: Partial<ViewLayerState>;
+  requiresViewMode?: ViewMode;
   suggestedCameraMode?: "overview" | "close" | "orbit";
   steps?: MissionStep[];
 };

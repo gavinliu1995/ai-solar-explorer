@@ -26,9 +26,12 @@ import Sun from "./celestial/Sun";
 import Venus from "./celestial/Venus";
 import { createMercuryTexture } from "./celestial/textureUtils";
 import { useOptionalTexture } from "./celestial/useOptionalTexture";
+import ConstellationLayer from "./scene/ConstellationLayer";
+import EclipticBand from "./scene/EclipticBand";
 import OrbitLine from "./scene/OrbitLine";
 import ProbeMarker from "./scene/ProbeMarker";
 import SpaceLabel from "./scene/SpaceLabel";
+import ZodiacMarkers from "./scene/ZodiacMarkers";
 import type {
   CameraCommand,
   CameraCommandType,
@@ -39,6 +42,7 @@ import type {
   LockBehavior,
   SelectedTarget,
   ViewLayerState,
+  ViewMode,
 } from "@/app/types/space";
 import { TARGET_LABELS_LOCALIZED, TARGET_POSITIONS } from "@/app/types/space";
 
@@ -54,6 +58,7 @@ type SolarSystemSceneProps = {
   selectedTarget: SelectedTarget;
   setExplorationPoint: (point: ExplorationPoint) => void;
   viewLayers: ViewLayerState;
+  viewMode: ViewMode;
 };
 
 type OrbitControlsHandle = ComponentRef<typeof OrbitControls>;
@@ -139,6 +144,7 @@ export default function SolarSystemScene({
   selectedTarget,
   setExplorationPoint,
   viewLayers,
+  viewMode,
 }: SolarSystemSceneProps) {
   const controlsRef = useRef<OrbitControlsHandle | null>(null);
   const userControlVersionRef = useRef(0);
@@ -191,6 +197,14 @@ export default function SolarSystemScene({
         </>
       ) : null}
 
+      {viewLayers.constellations ? (
+        <ConstellationLayer viewMode={viewMode} />
+      ) : null}
+      {viewLayers.ecliptic ? <EclipticBand viewMode={viewMode} /> : null}
+      {viewMode === "celestial-sphere" && viewLayers.zodiac ? (
+        <ZodiacMarkers />
+      ) : null}
+
       <SolarMap
         explorationPoint={explorationPoint}
         language={language}
@@ -198,6 +212,7 @@ export default function SolarSystemScene({
         selectedTarget={selectedTarget}
         setExplorationPoint={setExplorationPoint}
         viewLayers={viewLayers}
+        viewMode={viewMode}
       />
       {viewLayers.probes ? <ProbeLayer /> : null}
       <CameraRig
@@ -209,6 +224,7 @@ export default function SolarSystemScene({
         onNearestTargetChange={onNearestTargetChange}
         selectedTarget={selectedTarget}
         userControlVersionRef={userControlVersionRef}
+        viewMode={viewMode}
       />
       <OrbitControls
         ref={controlsRef}
@@ -240,6 +256,7 @@ function SolarMap({
   selectedTarget,
   setExplorationPoint,
   viewLayers,
+  viewMode,
 }: {
   explorationPoint: ExplorationPoint;
   language: Language;
@@ -247,8 +264,10 @@ function SolarMap({
   selectedTarget: SelectedTarget;
   setExplorationPoint: (point: ExplorationPoint) => void;
   viewLayers: ViewLayerState;
+  viewMode: ViewMode;
 }) {
   const labels = TARGET_LABELS_LOCALIZED[language];
+  const orbitOpacityScale = viewMode === "celestial-sphere" ? 0.56 : 1;
   const targetDoubleClickHandlers = useMemo(
     () =>
       SELECTABLE_TARGETS.reduce(
@@ -272,7 +291,7 @@ function SolarMap({
               active={orbit.target === selectedTarget}
               color={orbit.color}
               key={`${orbit.color}-${orbit.radiusX}`}
-              opacity={orbit.opacity}
+              opacity={orbit.opacity * orbitOpacityScale}
               radiusX={orbit.radiusX}
               radiusZ={orbit.radiusZ}
               rotationY={orbit.rotationY}
@@ -285,7 +304,7 @@ function SolarMap({
           <OrbitLine
             active={selectedTarget === "moon"}
             color="#cbd5e1"
-            opacity={0.05}
+            opacity={0.05 * orbitOpacityScale}
             radiusX={1.75}
             radiusZ={1.05}
             rotationY={0.22}
@@ -490,6 +509,7 @@ function CameraRig({
   onNearestTargetChange,
   selectedTarget,
   userControlVersionRef,
+  viewMode,
 }: {
   cameraCommand: CameraCommand;
   cameraMode: CameraMode;
@@ -499,6 +519,7 @@ function CameraRig({
   onNearestTargetChange: (target: SelectedTarget) => void;
   selectedTarget: SelectedTarget;
   userControlVersionRef: { current: number };
+  viewMode: ViewMode;
 }) {
   const { camera } = useThree();
   const autoFlightActiveRef = useRef(false);
@@ -516,7 +537,7 @@ function CameraRig({
   const targetPlanetPosition = useMemo(() => new Vector3(), []);
   const targetCameraPosition = useMemo(() => new Vector3(), []);
   const commandCameraPosition = useMemo(() => new Vector3(), []);
-  const overviewCameraPosition = useMemo(() => new Vector3(20, 10, 24), []);
+  const overviewCameraPosition = useMemo(() => new Vector3(), []);
 
   useEffect(() => {
     const pressedKeys = pressedKeysRef.current;
@@ -630,6 +651,11 @@ function CameraRig({
           controlsRef.current.target.copy(targetPlanetPosition);
           controlsRef.current.update();
         }
+        overviewCameraPosition.set(
+          viewMode === "celestial-sphere" ? 42 : 20,
+          viewMode === "celestial-sphere" ? 22 : 10,
+          viewMode === "celestial-sphere" ? 46 : 24,
+        );
         commandCameraPosition.copy(
           getCameraCommandPosition({
             command: cameraCommand.type,
