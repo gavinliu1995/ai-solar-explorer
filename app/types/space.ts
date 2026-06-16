@@ -30,7 +30,7 @@ export type LockBehavior = "fly" | "preserve";
 
 export type ControlSensitivity = "low" | "normal" | "high";
 
-export type ActivePanel = "info" | "missions" | "view";
+export type ActivePanel = "info" | "missions" | "tour" | "view";
 
 export type ViewMode = "solar-system" | "celestial-sphere";
 
@@ -118,12 +118,52 @@ export type Mission = {
   steps?: MissionStep[];
 };
 
+export type TourId =
+  | "grand-tour"
+  | "inner-worlds"
+  | "giant-planets"
+  | "outer-frontier";
+
+export type TourStop = {
+  id: string;
+  target: SpaceTarget;
+  title: string;
+  subtitle: string;
+  description: string;
+  objective: string;
+  recommendedMissionIds: string[];
+  requiredLayers?: Partial<ViewLayerState>;
+  viewMode?: ViewMode;
+  cameraMode?: "overview" | "close" | "focus";
+};
+
+export type Tour = {
+  id: TourId;
+  title: string;
+  subtitle: string;
+  description: string;
+  estimatedDuration: string;
+  stops: TourStop[];
+};
+
+export type TourMode = "idle" | "active" | "completed";
+
+export type ExplorationLogEventType =
+  | "tour_started"
+  | "tour_stop_focused"
+  | "tour_stop_completed"
+  | "tour_completed"
+  | "mission_started"
+  | "mission_step"
+  | "mission_completed"
+  | "target_locked";
+
 export type ExplorationLogEntry = {
   id: string;
-  missionId: string;
   message: string;
+  refId?: string;
   timestamp: string;
-  type: "started" | "step" | "completed";
+  type: ExplorationLogEventType;
 };
 
 export type SimMode = "REAL RATE" | "CRUISE MODE" | "PAUSED";
@@ -133,7 +173,8 @@ export type CameraCommandType =
   | "zoomIn"
   | "zoomOut"
   | "overview"
-  | "close";
+  | "close"
+  | "solarSystemOverview";
 
 export type CameraCommand = {
   type: CameraCommandType;

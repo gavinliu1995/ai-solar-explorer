@@ -99,8 +99,8 @@ const ORBITS: OrbitSpec[] = [
 
 const CAMERA_OFFSETS: Record<SelectedTarget, Vector3> = {
   "asteroid-belt": new Vector3(7.5, 5.2, 13.5),
-  "kuiper-belt": new Vector3(24, 18, 34),
-  ceres: new Vector3(0.72, 0.86, 1.78),
+  "kuiper-belt": new Vector3(18, 10, 24),
+  ceres: new Vector3(1.05, 1.42, 3.1),
   sun: new Vector3(2.2, 2.6, 6.4),
   mercury: new Vector3(0.55, 0.72, 1.58),
   venus: new Vector3(0.72, 1.0, 2.15),
@@ -111,7 +111,7 @@ const CAMERA_OFFSETS: Record<SelectedTarget, Vector3> = {
   saturn: new Vector3(1.6, 7.4, 12.2),
   uranus: new Vector3(1.2, 4.8, 7.8),
   neptune: new Vector3(1.2, 4.8, 8.2),
-  pluto: new Vector3(0.72, 0.95, 2.15),
+  pluto: new Vector3(1.08, 1.5, 3.35),
 };
 
 const TARGET_RADII: Record<SelectedTarget, number> = {
@@ -489,7 +489,7 @@ function SolarMap({
       <group
         onDoubleClick={targetDoubleClickHandlers.ceres}
         position={TARGET_POSITIONS.ceres}
-        scale={selectedTarget === "ceres" ? 1.28 : 0.92}
+        scale={selectedTarget === "ceres" ? 1.12 : 0.92}
       >
         <Ceres active={selectedTarget === "ceres"} position={[0, 0, 0]} />
       </group>
@@ -626,7 +626,7 @@ function SolarMap({
       <group
         onDoubleClick={targetDoubleClickHandlers.pluto}
         position={TARGET_POSITIONS.pluto}
-        scale={selectedTarget === "pluto" ? 1.28 : 0.92}
+        scale={selectedTarget === "pluto" ? 1.12 : 0.92}
       >
         <Pluto active={selectedTarget === "pluto"} position={[0, 0, 0]} />
       </group>
@@ -692,6 +692,7 @@ function CameraRig({
   const freeForwardVector = useMemo(() => new Vector3(), []);
   const freeRightVector = useMemo(() => new Vector3(), []);
   const targetPlanetPosition = useMemo(() => new Vector3(), []);
+  const commandTargetPosition = useMemo(() => new Vector3(), []);
   const targetCameraPosition = useMemo(() => new Vector3(), []);
   const commandCameraPosition = useMemo(() => new Vector3(), []);
   const overviewCameraPosition = useMemo(() => new Vector3(), []);
@@ -804,20 +805,32 @@ function CameraRig({
         });
         commandFlightActiveRef.current = false;
       } else {
+        const isSolarSystemOverview =
+          cameraCommand.type === "solarSystemOverview";
+        if (isSolarSystemOverview) {
+          commandTargetPosition.set(0, 0, 0);
+        } else {
+          commandTargetPosition.copy(targetPlanetPosition);
+        }
+
         if (controlsRef.current) {
-          controlsRef.current.target.copy(targetPlanetPosition);
+          controlsRef.current.target.copy(commandTargetPosition);
           controlsRef.current.update();
         }
-        overviewCameraPosition.set(
-          viewMode === "celestial-sphere" ? 58 : 42,
-          viewMode === "celestial-sphere" ? 38 : 26,
-          viewMode === "celestial-sphere" ? 92 : 70,
-        );
+        if (isSolarSystemOverview) {
+          overviewCameraPosition.set(58, 42, 92);
+        } else {
+          overviewCameraPosition.set(
+            viewMode === "celestial-sphere" ? 58 : 42,
+            viewMode === "celestial-sphere" ? 38 : 26,
+            viewMode === "celestial-sphere" ? 92 : 70,
+          );
+        }
         commandCameraPosition.copy(
           getCameraCommandPosition({
             command: cameraCommand.type,
             selectedTarget,
-            targetPosition: targetPlanetPosition,
+            targetPosition: commandTargetPosition,
             overviewPosition: overviewCameraPosition,
           }),
         );
@@ -927,7 +940,7 @@ function getCameraCommandPosition({
   selectedTarget: SelectedTarget;
   targetPosition: Vector3;
 }) {
-  if (command === "overview") {
+  if (command === "overview" || command === "solarSystemOverview") {
     return overviewPosition;
   }
 
@@ -976,12 +989,12 @@ function getCloseCameraScale(target: SelectedTarget) {
   if (target === "mercury") return 0.52;
   if (target === "venus") return 0.58;
   if (target === "moon") return 0.58;
-  if (target === "ceres") return 0.52;
+  if (target === "ceres") return 0.72;
   if (target === "jupiter") return 0.62;
   if (target === "saturn") return 0.7;
   if (target === "uranus") return 0.66;
   if (target === "neptune") return 0.66;
-  if (target === "pluto") return 0.54;
+  if (target === "pluto") return 0.74;
   return 0.55;
 }
 
@@ -1044,14 +1057,14 @@ function getMinCameraDistance(target: SelectedTarget) {
   if (target === "mercury") return Math.max(radiusDistance, 0.58);
   if (target === "venus") return Math.max(radiusDistance, 0.95);
   if (target === "moon") return Math.max(radiusDistance, 0.82);
-  if (target === "ceres") return Math.max(radiusDistance, 0.65);
+  if (target === "ceres") return Math.max(radiusDistance, 1.28);
   if (target === "asteroid-belt") return 10;
   if (target === "kuiper-belt") return 32;
   if (target === "saturn") return Math.max(radiusDistance, 5.4);
   if (target === "uranus" || target === "neptune") {
     return Math.max(radiusDistance, 1.85);
   }
-  if (target === "pluto") return Math.max(radiusDistance, 0.7);
+  if (target === "pluto") return Math.max(radiusDistance, 1.36);
 
   return Math.max(radiusDistance, 1.35);
 }

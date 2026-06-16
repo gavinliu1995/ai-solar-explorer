@@ -9,6 +9,7 @@ import {
   getRecommendedMission,
 } from "@/app/data/missions";
 import { SPACE_OBJECTS } from "@/app/data/spaceObjects";
+import { TOURS, getTourById } from "@/app/data/tours";
 import type {
   ActivePanel,
   CameraCommandType,
@@ -23,6 +24,10 @@ import type {
   MissionStatus,
   SelectedTarget,
   SimMode,
+  Tour,
+  TourId,
+  TourMode,
+  TourStop,
   ViewLayerState,
   ViewMode,
 } from "@/app/types/space";
@@ -53,19 +58,32 @@ type HudProps = {
   selectedTarget: SelectedTarget;
   shareToast: string | null;
   simMode: SimMode;
+  activeTourId: TourId | null;
+  activeTourStopIndex: number;
+  completedTourStopIds: string[];
+  tourMode: TourMode;
+  tourPanelOpen: boolean;
   viewLayers: ViewLayerState;
   viewMode: ViewMode;
   welcomeOpen: boolean;
   onAdvanceMissionStep: () => void;
   onCameraCommand: (command: CameraCommandType) => void;
   onCompleteMission: (missionId: string) => void;
+  onCompleteTourStop: () => void;
   onDismissWelcome: () => void;
+  onExitTour: () => void;
+  onFocusTourStop: () => void;
+  onJumpToTourStop: (stopIndex: number) => void;
+  onNextTourStop: () => void;
   onOpenViewPanel: () => void;
   onRelatedItem: (item: string) => void;
+  onRestartTour: () => void;
   onSelectSearchTarget: (target: SelectedTarget) => void;
   onShareView: () => void;
   onStartMission: (mission: Mission) => void;
   onStartRecommendedMission: () => void;
+  onStartTour: (tourId: TourId) => void;
+  onStartTourRecommendedMission: () => void;
   onToast: (message: string) => void;
   onToggleCameraMode: () => void;
   onToggleFullscreen: () => void;
@@ -99,6 +117,7 @@ const COPY = {
     close: "Close",
     collapseTargets: "Collapse",
     completed: "completed",
+    completeStop: "Complete Stop",
     celestialContext: "Celestial Context",
     celestialContextBody:
       "Celestial Sphere mode shows constellations, the ecliptic, and observation-direction references. It helps connect solar system orbits with the night-sky background.",
@@ -106,6 +125,8 @@ const COPY = {
     celestialModeMessage:
       "Celestial reference mode is active. Constellation lines show direction patterns seen from near Earth; they do not mean those stars are physically close together.",
     currentTarget: "Current Target",
+    currentTourHint:
+      "Current tour is active. Complete a recommended stop mission first for the cleanest route log.",
     detail: "Detail",
     distance: "Distance",
     focusLock: "Focus Lock",
@@ -177,7 +198,25 @@ const COPY = {
     welcomeSkip: "Explore Freely",
     welcomeTitle: "Welcome aboard",
     explorationLog: "Exploration Log",
+    captainLog: "Captain's Log",
+    exitTour: "Exit Tour",
+    focusStop: "Focus Current Stop",
+    jumpToStop: "Jump to Stop",
+    journeyProgress: "Journey Progress",
+    nextStop: "Next Stop",
     noLog: "No mission events yet.",
+    recommendedForTour: "Recommended for current tour stop",
+    restartTour: "Restart Tour",
+    solarSystemOverview: "Overview",
+    startTour: "Start Tour",
+    stopComplete: "Stop complete",
+    tour: "Tour",
+    tourActive: "Tour Active",
+    tourCatalog: "Tour Catalog",
+    tourComplete:
+      "Grand Tour complete. You have completed a full solar system journey.",
+    tourInstruction:
+      "Lock the current stop and complete at least one recommended mission, or mark the stop complete and continue.",
   },
   zh: {
     about:
@@ -189,6 +228,7 @@ const COPY = {
     close: "关闭",
     collapseTargets: "收起",
     completed: "已完成",
+    completeStop: "完成本站",
     celestialContext: "Celestial Context",
     celestialContextBody:
       "天球模式用于显示星座、黄道和观测方向参考。它帮助你理解太阳系轨道与夜空背景之间的关系。",
@@ -196,6 +236,7 @@ const COPY = {
     celestialModeMessage:
       "已进入天球参考模式。星座线展示的是从地球附近观察到的方向图案，并不代表恒星之间真实距离相近。",
     currentTarget: "当前目标",
+    currentTourHint: "当前正在进行路线探索。建议先完成本站推荐任务，再记录本站完成。",
     detail: "详情",
     distance: "距离",
     focusLock: "目标锁定",
@@ -266,7 +307,24 @@ const COPY = {
     welcomeSkip: "先自由探索",
     welcomeTitle: "欢迎登舰",
     explorationLog: "Exploration Log",
+    captainLog: "航行日志",
+    exitTour: "退出路线",
+    focusStop: "聚焦本站",
+    jumpToStop: "跳转站点",
+    journeyProgress: "旅程进度",
+    nextStop: "下一站",
     noLog: "暂无任务记录。",
+    recommendedForTour: "当前路线本站推荐",
+    restartTour: "重新开始",
+    solarSystemOverview: "总览",
+    startTour: "启动路线",
+    stopComplete: "本站已记录",
+    tour: "路线",
+    tourActive: "路线进行中",
+    tourCatalog: "路线目录",
+    tourComplete: "Grand Tour complete. 你已经完成一次完整太阳系大巡航。",
+    tourInstruction:
+      "请锁定当前目标并完成至少一个推荐任务，或直接标记本站完成后前往下一站。",
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -338,19 +396,32 @@ export default function Hud({
   selectedTarget,
   shareToast,
   simMode,
+  activeTourId,
+  activeTourStopIndex,
+  completedTourStopIds,
+  tourMode,
+  tourPanelOpen,
   viewLayers,
   viewMode,
   welcomeOpen,
   onAdvanceMissionStep,
   onCameraCommand,
   onCompleteMission,
+  onCompleteTourStop,
   onDismissWelcome,
+  onExitTour,
+  onFocusTourStop,
+  onJumpToTourStop,
+  onNextTourStop,
   onOpenViewPanel,
   onRelatedItem,
+  onRestartTour,
   onSelectSearchTarget,
   onShareView,
   onStartMission,
   onStartRecommendedMission,
+  onStartTour,
+  onStartTourRecommendedMission,
   onToast,
   onToggleCameraMode,
   onToggleFullscreen,
@@ -378,6 +449,7 @@ export default function Hud({
     selectedTarget,
     completedMissionIds,
   );
+  const activeTour = getTourById(activeTourId);
 
   function openViewPanelWithFeedback(message: string) {
     setHudMode("full");
@@ -475,8 +547,11 @@ export default function Hud({
         <>
           <LeftPanel
             activePanel={activePanel}
+            activeTour={activeTour}
+            activeTourStopIndex={activeTourStopIndex}
             collapsed={leftPanelCollapsed}
             completedMissionIds={completedMissionIds}
+            completedTourStopIds={completedTourStopIds}
             controlSensitivity={controlSensitivity}
             copy={copy}
             detailOpen={detailOpen}
@@ -488,12 +563,21 @@ export default function Hud({
             selectedMissionId={selectedMissionId}
             selectedTarget={selectedTarget}
             simMode={simMode}
+            tourMode={tourMode}
             viewLayers={viewLayers}
             viewMode={viewMode}
             onAdvanceMissionStep={onAdvanceMissionStep}
             onCompleteMission={onCompleteMission}
+            onCompleteTourStop={onCompleteTourStop}
+            onExitTour={onExitTour}
+            onFocusTourStop={onFocusTourStop}
+            onJumpToTourStop={onJumpToTourStop}
+            onNextTourStop={onNextTourStop}
             onRelatedItem={onRelatedItem}
+            onRestartTour={onRestartTour}
             onStartMission={onStartMission}
+            onStartTour={onStartTour}
+            onStartTourRecommendedMission={onStartTourRecommendedMission}
             setActivePanel={setActivePanel}
             setCollapsed={setLeftPanelCollapsed}
             setControlSensitivity={setControlSensitivity}
@@ -515,13 +599,20 @@ export default function Hud({
           />
           <AssistantPanel
             cameraMode={cameraMode}
+            activeTour={activeTour}
+            activeTourStopIndex={activeTourStopIndex}
             completedMissionIds={completedMissionIds}
+            completedTourStopIds={completedTourStopIds}
             copy={copy}
             explorationPoint={explorationPoint}
             language={language}
             missionStepIndex={missionStepIndex}
+            onCompleteTourStop={onCompleteTourStop}
+            onFocusTourStop={onFocusTourStop}
+            onNextTourStop={onNextTourStop}
             selectedMissionId={selectedMissionId}
             selectedTarget={selectedTarget}
+            tourMode={tourMode}
             viewMode={viewMode}
           />
           <SubtleCrosshair />
@@ -545,6 +636,26 @@ export default function Hud({
         simMode={simMode}
         setSelectedTarget={setSelectedTarget}
       />
+
+      {hudMode === "full" ? (
+        activeTour && tourPanelOpen ? (
+          <JourneyProgressBar
+            activeTour={activeTour}
+            activeTourStopIndex={activeTourStopIndex}
+            completedTourStopIds={completedTourStopIds}
+            copy={copy}
+            language={language}
+          />
+        ) : null
+      ) : null}
+
+      {hudMode === "minimal" && activeTour ? (
+        <MinimalJourneyStatus
+          activeTour={activeTour}
+          activeTourStopIndex={activeTourStopIndex}
+          language={language}
+        />
+      ) : null}
 
       {hudMode === "full" ? (
         <BottomTimeline
@@ -646,7 +757,7 @@ function TopNavigation({
             onAbout={() => onMenuNotice(copy.about)}
             onKeyboard={() => onMenuNotice(copy.keyboard)}
             onReset={() => {
-              onCameraCommand("overview");
+              onCameraCommand("solarSystemOverview");
               onMenuNotice(copy.resetDone);
             }}
             onToggleHud={onToggleHudMode}
@@ -944,8 +1055,11 @@ function WelcomeOverlay({
 
 function LeftPanel({
   activePanel,
+  activeTour,
+  activeTourStopIndex,
   collapsed,
   completedMissionIds,
+  completedTourStopIds,
   controlSensitivity,
   copy,
   detailOpen,
@@ -957,12 +1071,21 @@ function LeftPanel({
   selectedMissionId,
   selectedTarget,
   simMode,
+  tourMode,
   viewLayers,
   viewMode,
   onAdvanceMissionStep,
   onCompleteMission,
+  onCompleteTourStop,
+  onExitTour,
+  onFocusTourStop,
+  onJumpToTourStop,
+  onNextTourStop,
   onRelatedItem,
+  onRestartTour,
   onStartMission,
+  onStartTour,
+  onStartTourRecommendedMission,
   setActivePanel,
   setCollapsed,
   setControlSensitivity,
@@ -972,8 +1095,11 @@ function LeftPanel({
   setViewMode,
 }: {
   activePanel: ActivePanel;
+  activeTour: Tour | null;
+  activeTourStopIndex: number;
   collapsed: boolean;
   completedMissionIds: string[];
+  completedTourStopIds: string[];
   controlSensitivity: ControlSensitivity;
   copy: (typeof COPY)[Language];
   detailOpen: boolean;
@@ -985,12 +1111,21 @@ function LeftPanel({
   selectedMissionId: string | null;
   selectedTarget: SelectedTarget;
   simMode: SimMode;
+  tourMode: TourMode;
   viewLayers: ViewLayerState;
   viewMode: ViewMode;
   onAdvanceMissionStep: () => void;
   onCompleteMission: (missionId: string) => void;
+  onCompleteTourStop: () => void;
+  onExitTour: () => void;
+  onFocusTourStop: () => void;
+  onJumpToTourStop: (stopIndex: number) => void;
+  onNextTourStop: () => void;
   onRelatedItem: (item: string) => void;
+  onRestartTour: () => void;
   onStartMission: (mission: Mission) => void;
+  onStartTour: (tourId: TourId) => void;
+  onStartTourRecommendedMission: () => void;
   setActivePanel: (panel: ActivePanel) => void;
   setCollapsed: (collapsed: boolean) => void;
   setControlSensitivity: (sensitivity: ControlSensitivity) => void;
@@ -1028,7 +1163,7 @@ function LeftPanel({
       </div>
 
       <div className="flex border-b border-white/10">
-        {(["info", "missions", "view"] as ActivePanel[]).map((panel) => (
+        {(["info", "missions", "tour", "view"] as ActivePanel[]).map((panel) => (
           <button
             key={panel}
             type="button"
@@ -1069,6 +1204,24 @@ function LeftPanel({
             onAdvanceMissionStep={onAdvanceMissionStep}
             onCompleteMission={onCompleteMission}
             onStartMission={onStartMission}
+            tourStop={activeTour?.stops[activeTourStopIndex] ?? null}
+          />
+        ) : activePanel === "tour" ? (
+          <TourTab
+            activeTour={activeTour}
+            activeTourStopIndex={activeTourStopIndex}
+            completedTourStopIds={completedTourStopIds}
+            copy={copy}
+            language={language}
+            tourMode={tourMode}
+            onCompleteTourStop={onCompleteTourStop}
+            onExitTour={onExitTour}
+            onFocusTourStop={onFocusTourStop}
+            onJumpToTourStop={onJumpToTourStop}
+            onNextTourStop={onNextTourStop}
+            onRestartTour={onRestartTour}
+            onStartTour={onStartTour}
+            onStartTourRecommendedMission={onStartTourRecommendedMission}
           />
         ) : (
           <ViewTab
@@ -1091,6 +1244,7 @@ function LeftPanel({
 function getPanelLabel(panel: ActivePanel, copy: (typeof COPY)[Language]) {
   if (panel === "info") return copy.info;
   if (panel === "missions") return copy.missions;
+  if (panel === "tour") return copy.tour;
   return copy.view;
 }
 
@@ -1120,9 +1274,14 @@ function InfoTab({
         <p className="text-[10px] uppercase tracking-[0.28em] text-emerald-200">
           {copy.currentTarget}
         </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-wide text-white">
-          {info.name[language]}
-        </h1>
+        <div className="mt-2 flex items-center gap-3">
+          <h1 className="text-3xl font-semibold tracking-wide text-white">
+            {info.name[language]}
+          </h1>
+          <span className="border border-emerald-300/30 bg-emerald-950/20 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-100">
+            LOCKED
+          </span>
+        </div>
         <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
           {info.type[language]}
         </p>
@@ -1199,6 +1358,7 @@ function MissionsTab({
   recommendedMission,
   selectedMissionId,
   selectedTarget,
+  tourStop,
   onAdvanceMissionStep,
   onCompleteMission,
   onStartMission,
@@ -1210,6 +1370,7 @@ function MissionsTab({
   recommendedMission: Mission;
   selectedMissionId: string | null;
   selectedTarget: SelectedTarget;
+  tourStop: TourStop | null;
   onAdvanceMissionStep: () => void;
   onCompleteMission: (missionId: string) => void;
   onStartMission: (mission: Mission) => void;
@@ -1241,6 +1402,12 @@ function MissionsTab({
         copy={copy}
         totalCount={totalCount}
       />
+
+      {tourStop ? (
+        <div className="border border-emerald-300/20 bg-emerald-950/12 p-3 text-xs leading-5 text-emerald-100/80">
+          {copy.currentTourHint}
+        </div>
+      ) : null}
 
       {selectedMission ? (
         <ActiveMissionStepCard
@@ -1274,13 +1441,17 @@ function MissionsTab({
           selectedMissionId,
           completedMissionIds,
         );
+        const recommendedForTour =
+          tourStop?.recommendedMissionIds.includes(mission.id) ?? false;
 
         return (
           <article
             key={mission.id}
             className={[
               "border p-3 transition",
-              status === "active"
+              recommendedForTour
+                ? "border-emerald-300/35 bg-emerald-950/14"
+                : status === "active"
                 ? "border-cyan-300/45 bg-cyan-950/22 shadow-[0_0_22px_rgba(34,211,238,0.12)]"
                 : status === "completed"
                   ? "border-emerald-300/35 bg-emerald-950/14"
@@ -1308,6 +1479,11 @@ function MissionsTab({
                     : "locked"}
               </span>
             </div>
+            {recommendedForTour ? (
+              <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200">
+                {copy.recommendedForTour}
+              </p>
+            ) : null}
             <p className="mt-2 text-xs leading-5 text-slate-500">
               {mission.description}
             </p>
@@ -1508,20 +1684,21 @@ function ExplorationLogPanel({
   return (
     <section className="border border-white/10 bg-black/28 p-3">
       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-        {copy.explorationLog}
+        {copy.captainLog}
       </p>
       <div className="mt-3 grid max-h-36 gap-2 overflow-y-auto">
         {explorationLog.length === 0 ? (
           <p className="text-xs text-slate-600">{copy.noLog}</p>
         ) : (
-          explorationLog.slice(0, 6).map((entry) => (
+          explorationLog.slice(0, 8).map((entry, index) => (
             <div
               key={entry.id}
               className="border border-white/10 bg-white/[0.03] p-2 text-xs"
             >
               <div className="mb-1 flex items-center justify-between gap-2">
                 <span className="uppercase tracking-[0.14em] text-slate-500">
-                  {entry.type}
+                  [{String(index + 1).padStart(3, "0")}]{" "}
+                  {formatLogEvent(entry.type)}
                 </span>
                 <span className="font-mono text-[10px] text-slate-600">
                   {entry.timestamp}
@@ -1533,6 +1710,219 @@ function ExplorationLogPanel({
         )}
       </div>
     </section>
+  );
+}
+
+function TourTab({
+  activeTour,
+  activeTourStopIndex,
+  completedTourStopIds,
+  copy,
+  language,
+  tourMode,
+  onCompleteTourStop,
+  onExitTour,
+  onFocusTourStop,
+  onJumpToTourStop,
+  onNextTourStop,
+  onRestartTour,
+  onStartTour,
+  onStartTourRecommendedMission,
+}: {
+  activeTour: Tour | null;
+  activeTourStopIndex: number;
+  completedTourStopIds: string[];
+  copy: (typeof COPY)[Language];
+  language: Language;
+  tourMode: TourMode;
+  onCompleteTourStop: () => void;
+  onExitTour: () => void;
+  onFocusTourStop: () => void;
+  onJumpToTourStop: (stopIndex: number) => void;
+  onNextTourStop: () => void;
+  onRestartTour: () => void;
+  onStartTour: (tourId: TourId) => void;
+  onStartTourRecommendedMission: () => void;
+}) {
+  if (!activeTour) {
+    return (
+      <div className="grid gap-3">
+        <div className="border border-cyan-300/20 bg-cyan-950/15 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
+            {copy.tourCatalog}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-slate-400">
+            Route-based exploration chapters for the solar system.
+          </p>
+        </div>
+        {TOURS.map((tour) => (
+          <article
+            key={tour.id}
+            className="border border-white/10 bg-white/[0.03] p-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-100">
+                  {tour.title}
+                </h2>
+                <p className="mt-1 text-xs text-cyan-100/75">
+                  {tour.subtitle}
+                </p>
+              </div>
+              <span className="border border-white/10 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-slate-500">
+                {tour.stops.length} stops
+              </span>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-400">
+              {tour.description}
+            </p>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                {tour.estimatedDuration}
+              </span>
+              <button
+                type="button"
+                onClick={() => onStartTour(tour.id)}
+                className="border border-cyan-300/35 bg-cyan-950/20 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-100 transition hover:border-cyan-200 active:scale-[0.98]"
+              >
+                {copy.startTour}
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    );
+  }
+
+  const currentStop = activeTour.stops[activeTourStopIndex];
+  const progressPercent =
+    activeTour.stops.length > 0
+      ? ((activeTourStopIndex + 1) / activeTour.stops.length) * 100
+      : 0;
+
+  return (
+    <div className="grid gap-3">
+      <div className="border border-cyan-300/25 bg-cyan-950/16 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-100">
+              {copy.tourActive}
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-white">
+              {activeTour.title}
+            </h2>
+            <p className="mt-1 text-xs text-slate-400">
+              Stop {activeTourStopIndex + 1}/{activeTour.stops.length}
+            </p>
+          </div>
+          <span className="border border-emerald-300/30 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-emerald-100">
+            {tourMode}
+          </span>
+        </div>
+        <div className="mt-3 h-1.5 border border-white/10 bg-black/40">
+          <div
+            className="h-full bg-cyan-300/75 shadow-[0_0_14px_rgba(34,211,238,0.35)]"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+      </div>
+
+      <article className="border border-white/10 bg-white/[0.035] p-3">
+        <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">
+          {SPACE_OBJECTS[currentStop.target].name[language]}
+        </p>
+        <h3 className="mt-2 text-base font-semibold text-slate-100">
+          {currentStop.title}
+        </h3>
+        <p className="mt-1 text-xs text-cyan-100/75">
+          {currentStop.subtitle}
+        </p>
+        <p className="mt-3 text-xs leading-5 text-slate-300">
+          {currentStop.objective}
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onFocusTourStop}
+            className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100 transition hover:border-cyan-200"
+          >
+            {copy.focusStop}
+          </button>
+          <button
+            type="button"
+            onClick={onStartTourRecommendedMission}
+            className="border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-100 transition hover:border-emerald-200"
+          >
+            {copy.startRecommended}
+          </button>
+          <button
+            type="button"
+            onClick={onCompleteTourStop}
+            className="border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-100 transition hover:border-emerald-200"
+          >
+            {copy.completeStop}
+          </button>
+          <button
+            type="button"
+            onClick={onNextTourStop}
+            className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100 transition hover:border-cyan-200"
+          >
+            {copy.nextStop}
+          </button>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={onRestartTour}
+            className="flex-1 border border-white/10 bg-white/[0.03] px-2 py-2 text-[10px] uppercase tracking-[0.12em] text-slate-400 transition hover:border-cyan-300/35 hover:text-cyan-100"
+          >
+            {copy.restartTour}
+          </button>
+          <button
+            type="button"
+            onClick={onExitTour}
+            className="flex-1 border border-white/10 bg-white/[0.03] px-2 py-2 text-[10px] uppercase tracking-[0.12em] text-slate-400 transition hover:border-red-300/35 hover:text-red-100"
+          >
+            {copy.exitTour}
+          </button>
+        </div>
+      </article>
+
+      <div className="grid max-h-64 gap-2 overflow-y-auto">
+        {activeTour.stops.map((stop, index) => {
+          const completed = completedTourStopIds.includes(stop.id);
+          const active = index === activeTourStopIndex;
+
+          return (
+            <button
+              key={stop.id}
+              type="button"
+              onClick={() => onJumpToTourStop(index)}
+              className={[
+                "border p-2 text-left transition",
+                active
+                  ? "border-cyan-300/45 bg-cyan-950/20"
+                  : completed
+                    ? "border-emerald-300/30 bg-emerald-950/12"
+                    : "border-white/10 bg-white/[0.025] hover:border-cyan-300/30",
+              ].join(" ")}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-slate-200">
+                  {index + 1}. {stop.title}
+                </span>
+                <span className="text-[9px] uppercase tracking-[0.14em] text-slate-500">
+                  {completed ? "complete" : active ? "active" : "upcoming"}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">
+                {SPACE_OBJECTS[stop.target].name[language]}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -1711,6 +2101,7 @@ function RightToolbar({
     title: string;
   }> = [
     { label: language === "zh" ? "视图" : "View", onClick: onOpenLayers, title: "Layers" },
+    { label: copy.solarSystemOverview, onClick: () => onTriggerCommand("solarSystemOverview"), title: "Solar System Overview" },
     { label: "+", onClick: () => onTriggerCommand("zoomIn"), title: "Zoom +" },
     { label: "-", onClick: () => onTriggerCommand("zoomOut"), title: "Zoom -" },
     { label: language === "zh" ? "聚焦" : "Focus", onClick: () => onTriggerCommand("focus"), title: "Focus" },
@@ -1737,26 +2128,41 @@ function RightToolbar({
 
 function AssistantPanel({
   cameraMode,
+  activeTour,
+  activeTourStopIndex,
   completedMissionIds,
+  completedTourStopIds,
   copy,
   explorationPoint,
   language,
   missionStepIndex,
+  onCompleteTourStop,
+  onFocusTourStop,
+  onNextTourStop,
   selectedMissionId,
   selectedTarget,
+  tourMode,
   viewMode,
 }: {
   cameraMode: CameraMode;
+  activeTour: Tour | null;
+  activeTourStopIndex: number;
   completedMissionIds: string[];
+  completedTourStopIds: string[];
   copy: (typeof COPY)[Language];
   explorationPoint: ExplorationPoint;
   language: Language;
   missionStepIndex: number;
+  onCompleteTourStop: () => void;
+  onFocusTourStop: () => void;
+  onNextTourStop: () => void;
   selectedMissionId: string | null;
   selectedTarget: SelectedTarget;
+  tourMode: TourMode;
   viewMode: ViewMode;
 }) {
   const mission = getMissionById(selectedMissionId);
+  const currentTourStop = activeTour?.stops[activeTourStopIndex] ?? null;
   const missionCompleted = mission
     ? completedMissionIds.includes(mission.id)
     : false;
@@ -1771,6 +2177,13 @@ function AssistantPanel({
     selectedTarget,
     viewMode,
   });
+  const tourStopCompleted = currentTourStop
+    ? completedTourStopIds.includes(currentTourStop.id)
+    : false;
+  const nextTourStop =
+    activeTour && activeTourStopIndex + 1 < activeTour.stops.length
+      ? activeTour.stops[activeTourStopIndex + 1]
+      : null;
 
   return (
     <aside className="pointer-events-auto absolute bottom-24 right-24 w-[min(31vw,350px)] border border-white/10 bg-black/48 p-4 shadow-[0_0_28px_rgba(8,145,178,0.12)] backdrop-blur-xl">
@@ -1780,12 +2193,63 @@ function AssistantPanel({
             {copy.aiTitle}
           </h2>
           <p className="mt-1 text-[9px] uppercase tracking-[0.2em] text-slate-600">
-            {mission ? mission.title : copy.aiSubtitle}
+            {currentTourStop
+              ? `${activeTour?.title} ${activeTourStopIndex + 1}/${activeTour?.stops.length}`
+              : mission
+                ? mission.title
+                : copy.aiSubtitle}
           </p>
         </div>
         <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(110,231,183,0.85)]" />
       </div>
-      <p className="mt-3 text-sm leading-6 text-slate-300">{message}</p>
+      {currentTourStop ? (
+        <div className="mt-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-100">
+            {tourMode === "completed" ? "TOUR COMPLETE" : "TOUR ACTIVE"}
+          </p>
+          <h3 className="mt-2 text-sm font-semibold text-slate-100">
+            {currentTourStop.title}
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            {tourMode === "completed"
+              ? copy.tourComplete
+              : tourStopCompleted
+                ? `${copy.stopComplete}。${
+                    nextTourStop
+                      ? `${copy.nextStop}: ${nextTourStop.title}`
+                      : copy.tourComplete
+                  }`
+                : `${currentTourStop.objective} ${copy.tourInstruction}`}
+          </p>
+          {tourMode !== "completed" ? (
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={onFocusTourStop}
+                className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-cyan-100 transition hover:border-cyan-200"
+              >
+                Focus
+              </button>
+              <button
+                type="button"
+                onClick={onCompleteTourStop}
+                className="border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-emerald-100 transition hover:border-emerald-200"
+              >
+                Complete
+              </button>
+              <button
+                type="button"
+                onClick={onNextTourStop}
+                className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-cyan-100 transition hover:border-cyan-200"
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm leading-6 text-slate-300">{message}</p>
+      )}
     </aside>
   );
 }
@@ -1840,6 +2304,83 @@ function getAssistantMessage({
   }
 
   return TARGET_SUGGESTIONS[language][selectedTarget];
+}
+
+function JourneyProgressBar({
+  activeTour,
+  activeTourStopIndex,
+  completedTourStopIds,
+  copy,
+  language,
+}: {
+  activeTour: Tour;
+  activeTourStopIndex: number;
+  completedTourStopIds: string[];
+  copy: (typeof COPY)[Language];
+  language: Language;
+}) {
+  const currentStop = activeTour.stops[activeTourStopIndex];
+  const currentTarget = SPACE_OBJECTS[currentStop.target].name[language];
+
+  return (
+    <section className="pointer-events-auto absolute left-1/2 top-16 w-[min(62vw,720px)] -translate-x-1/2 border border-white/10 bg-black/52 px-4 py-3 backdrop-blur-xl">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-cyan-100">
+            {copy.journeyProgress}
+          </p>
+          <p className="mt-1 text-xs text-slate-300">
+            {activeTour.title} · Stop {activeTourStopIndex + 1}/
+            {activeTour.stops.length} · {currentTarget}
+          </p>
+        </div>
+        <span className="hidden text-[10px] uppercase tracking-[0.18em] text-slate-500 sm:block">
+          {currentStop.title}
+        </span>
+      </div>
+      <div className="flex items-center gap-1">
+        {activeTour.stops.map((stop, index) => {
+          const complete = completedTourStopIds.includes(stop.id);
+          const active = index === activeTourStopIndex;
+
+          return (
+            <span
+              key={stop.id}
+              className={[
+                "h-1.5 flex-1 border border-white/10",
+                active
+                  ? "bg-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.6)]"
+                  : complete
+                    ? "bg-emerald-300/75"
+                    : "bg-white/[0.05]",
+              ].join(" ")}
+              title={stop.title}
+            />
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function MinimalJourneyStatus({
+  activeTour,
+  activeTourStopIndex,
+  language,
+}: {
+  activeTour: Tour;
+  activeTourStopIndex: number;
+  language: Language;
+}) {
+  const currentStop = activeTour.stops[activeTourStopIndex];
+  const targetLabel = SPACE_OBJECTS[currentStop.target].name[language];
+
+  return (
+    <div className="pointer-events-auto absolute left-1/2 top-16 -translate-x-1/2 border border-cyan-300/25 bg-black/55 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100 backdrop-blur-xl">
+      {activeTour.title} {activeTourStopIndex + 1}/{activeTour.stops.length} ·{" "}
+      {targetLabel}
+    </div>
+  );
 }
 
 function MissionTargets({
@@ -2178,6 +2719,7 @@ function commandToToast(command: CameraCommandType, language: Language) {
     close: "相机已切近目标",
     focus: "目标已重新聚焦",
     overview: "总览视角已恢复",
+    solarSystemOverview: "完整太阳系总览已打开",
     zoomIn: "相机拉近",
     zoomOut: "相机拉远",
   };
@@ -2185,9 +2727,25 @@ function commandToToast(command: CameraCommandType, language: Language) {
     close: "Close camera command sent",
     focus: "Target refocused",
     overview: "Overview restored",
+    solarSystemOverview: "Solar system overview restored",
     zoomIn: "Camera moved closer",
     zoomOut: "Camera moved outward",
   };
 
   return language === "zh" ? zh[command] : en[command];
+}
+
+function formatLogEvent(type: ExplorationLogEntry["type"]) {
+  const labels: Record<ExplorationLogEntry["type"], string> = {
+    mission_completed: "MISSION COMPLETE",
+    mission_started: "MISSION STARTED",
+    mission_step: "MISSION STEP",
+    target_locked: "TARGET LOCKED",
+    tour_completed: "TOUR COMPLETE",
+    tour_started: "TOUR STARTED",
+    tour_stop_completed: "STOP COMPLETE",
+    tour_stop_focused: "STOP FOCUSED",
+  };
+
+  return labels[type];
 }

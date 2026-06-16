@@ -1,5 +1,6 @@
 "use client";
 
+import { AdditiveBlending, BackSide } from "three";
 import OrbitLine from "./OrbitLine";
 import SpaceLabel from "./SpaceLabel";
 
@@ -31,7 +32,7 @@ export default function MoonSystem({
             <OrbitLine
               color="#94a3b8"
               key={`${moon.name}-orbit`}
-              opacity={0.12}
+              opacity={0.07}
               radiusX={moon.distance}
               radiusZ={moon.distance * 0.78}
               rotationY={0.18}
@@ -50,11 +51,27 @@ export default function MoonSystem({
               <sphereGeometry args={[moon.radius, 18, 18]} />
               <meshStandardMaterial
                 color={moon.color}
+                depthWrite={isActive}
                 emissive={moon.color}
-                emissiveIntensity={isActive ? 0.08 : 0.02}
-                roughness={0.9}
+                emissiveIntensity={isActive ? 0.09 : 0.012}
+                opacity={isActive ? 0.96 : 0.2}
+                roughness={0.92}
+                transparent
               />
             </mesh>
+            {isActive ? (
+              <mesh scale={1.9}>
+                <sphereGeometry args={[moon.radius, 14, 14]} />
+                <meshBasicMaterial
+                  blending={AdditiveBlending}
+                  color={moon.color}
+                  depthWrite={false}
+                  opacity={0.055}
+                  side={BackSide}
+                  transparent
+                />
+              </mesh>
+            ) : null}
             {showLabels && isActive ? (
               <SpaceLabel position={[0, moon.radius + 0.22, 0]}>
                 {moon.name.toUpperCase()}

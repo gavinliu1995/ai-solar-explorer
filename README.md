@@ -6,6 +6,9 @@ Argonaut is an independent educational prototype for mission-guided solar system
 
 - Mission Control deep-space console
 - Mission Experience Loop with guided steps, completion feedback, and Exploration Log
+- Grand Tour route-based exploration
+- Tour Catalog with Grand Tour, Inner Worlds, Giant Planets, and Outer Frontier routes
+- Journey Progress and Captain's Log
 - Complete Solar System Map from Mercury to Neptune
 - Sun, Mercury, Venus, Earth, Moon, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto, and Ceres
 - Asteroid Belt and Kuiper Belt region targets
@@ -13,6 +16,16 @@ Argonaut is an independent educational prototype for mission-guided solar system
 - Solar System / Celestial Sphere modes
 - Constellation layer, ecliptic plane, and zodiac markers
 - Local texture loading with procedural fallback materials
+- Outer worlds support local textures for Uranus, Neptune, Pluto, and Ceres, with procedural fallbacks
+
+## Roadmap
+
+- v0.1 Mission Console
+- v0.2 Mission Experience Loop
+- v0.3 Celestial Context
+- v0.4 Visual Reality
+- v0.5 Complete Solar System
+- v0.6 Grand Tour
 
 ## Local Textures
 

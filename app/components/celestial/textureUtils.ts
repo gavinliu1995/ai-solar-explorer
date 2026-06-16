@@ -84,6 +84,62 @@ function drawBlob(context: CanvasRenderingContext2D, blob: BlobSpec) {
   context.restore();
 }
 
+function drawSoftPatch(context: CanvasRenderingContext2D, blob: BlobSpec) {
+  context.save();
+  context.translate(blob.x, blob.y);
+  context.scale(blob.width, blob.height);
+
+  const gradient = context.createRadialGradient(0, 0, 0, 0, 0, 1);
+  gradient.addColorStop(0, blob.color);
+  gradient.addColorStop(0.62, blob.color);
+  gradient.addColorStop(1, "rgba(0,0,0,0)");
+
+  context.globalAlpha = blob.opacity ?? 1;
+  context.fillStyle = gradient;
+  context.beginPath();
+  context.arc(0, 0, 1, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+}
+
+function drawFineCraterField(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  count: number,
+  seedBase: number,
+  color: string,
+  maxRadius: number,
+  opacity = 1,
+) {
+  for (let index = 0; index < count; index += 1) {
+    const seed = seedBase + index * 8;
+    const x = seededUnit(seed + 1) * width;
+    const y = seededUnit(seed + 2) * height;
+    const radius = 1.8 + seededUnit(seed + 3) * maxRadius;
+    const craterOpacity = opacity * (0.05 + seededUnit(seed + 4) * 0.15);
+
+    context.strokeStyle = color.replace("<alpha>", craterOpacity.toFixed(3));
+    context.lineWidth = 0.7 + seededUnit(seed + 5) * 0.8;
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.stroke();
+
+    if (index % 6 === 0) {
+      context.fillStyle = `rgba(245,236,216,${(craterOpacity * 0.28).toFixed(3)})`;
+      context.beginPath();
+      context.arc(
+        x - radius * 0.26,
+        y - radius * 0.28,
+        radius * 0.24,
+        0,
+        Math.PI * 2,
+      );
+      context.fill();
+    }
+  }
+}
+
 function drawBands(
   context: CanvasRenderingContext2D,
   width: number,
@@ -344,99 +400,157 @@ export function createSunTexture() {
 }
 
 export function createCeresTexture() {
-  return createTexture(768, 384, (context) => {
-    context.fillStyle = "#8b8377";
-    context.fillRect(0, 0, 768, 384);
-    drawNoise(context, 768, 384, 0.18, "45,40,36");
-    drawNoise(context, 768, 384, 0.1, "220,210,190");
+  return createTexture(1024, 512, (context) => {
+    const gradient = context.createLinearGradient(0, 0, 0, 512);
+    gradient.addColorStop(0, "#98958e");
+    gradient.addColorStop(0.44, "#716e67");
+    gradient.addColorStop(1, "#4a4741");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 1024, 512);
+    drawNoise(context, 1024, 512, 0.18, "44,40,36");
+    drawNoise(context, 1024, 512, 0.06, "220,216,205");
 
     [
-      { color: "#5f574f", x: 205, y: 155, width: 70, height: 42, seed: 81 },
-      { color: "#b8ac99", x: 420, y: 212, width: 32, height: 20, seed: 82 },
-      { color: "#6b6258", x: 560, y: 118, width: 54, height: 34, seed: 83 },
-    ].forEach((blob) => drawBlob(context, { ...blob, opacity: 0.58 }));
+      { color: "rgba(58,55,51,0.34)", height: 64, seed: 81, width: 170, x: 230, y: 215 },
+      { color: "rgba(91,86,78,0.28)", height: 58, seed: 82, width: 148, x: 690, y: 170 },
+      { color: "rgba(50,47,43,0.28)", height: 44, seed: 83, width: 184, x: 476, y: 365 },
+      { color: "rgba(155,148,132,0.22)", height: 34, seed: 84, width: 108, x: 120, y: 305 },
+      { color: "rgba(184,176,156,0.24)", height: 18, seed: 85, width: 52, x: 615, y: 270 },
+      { color: "rgba(217,210,188,0.42)", height: 7, seed: 86, width: 12, x: 642, y: 264 },
+      { color: "rgba(211,205,184,0.34)", height: 5, seed: 87, width: 9, x: 671, y: 252 },
+    ].forEach((blob) => drawSoftPatch(context, blob));
 
-    for (let index = 0; index < 48; index += 1) {
-      const x = seededUnit(index * 8 + 1) * 768;
-      const y = seededUnit(index * 8 + 2) * 384;
-      const radius = 4 + seededUnit(index * 8 + 3) * 12;
-      context.strokeStyle = `rgba(42,38,34,${0.15 + seededUnit(index * 8 + 4) * 0.18})`;
-      context.lineWidth = 1;
-      context.beginPath();
-      context.arc(x, y, radius, 0, Math.PI * 2);
-      context.stroke();
-    }
+    drawFineCraterField(
+      context,
+      1024,
+      512,
+      112,
+      1300,
+      "rgba(37,33,30,<alpha>)",
+      8,
+      0.42,
+    );
   });
 }
 
 export function createUranusTexture() {
   return createTexture(768, 384, (context) => {
     const gradient = context.createLinearGradient(0, 0, 0, 384);
-    gradient.addColorStop(0, "#b9f2f2");
-    gradient.addColorStop(0.5, "#8bd7dd");
-    gradient.addColorStop(1, "#5ca9b9");
+    gradient.addColorStop(0, "#d2fbf3");
+    gradient.addColorStop(0.28, "#a8e6e2");
+    gradient.addColorStop(0.54, "#79c6d0");
+    gradient.addColorStop(1, "#447f93");
     context.fillStyle = gradient;
     context.fillRect(0, 0, 768, 384);
-    drawBands(
-      context,
-      768,
-      384,
-      ["#bff5f2", "#90dbe1", "#a9e9ea", "#74bfcc", "#a2e0e2"],
-      0.22,
-    );
-    drawNoise(context, 768, 384, 0.035, "230,255,255");
+
+    const bands = [
+      { color: "rgba(221,255,250,0.16)", y: 54, height: 18 },
+      { color: "rgba(130,214,221,0.14)", y: 118, height: 22 },
+      { color: "rgba(238,255,253,0.1)", y: 182, height: 14 },
+      { color: "rgba(84,154,174,0.16)", y: 252, height: 26 },
+      { color: "rgba(194,245,242,0.1)", y: 316, height: 16 },
+    ];
+
+    bands.forEach((band, index) => {
+      context.fillStyle = band.color;
+      context.beginPath();
+      context.moveTo(0, band.y);
+
+      for (let x = 0; x <= 768; x += 18) {
+        context.lineTo(
+          x,
+          band.y + Math.sin(x * 0.018 + index) * 4,
+        );
+      }
+
+      context.lineTo(768, band.y + band.height);
+      context.lineTo(0, band.y + band.height);
+      context.closePath();
+      context.fill();
+    });
+
+    drawNoise(context, 768, 384, 0.025, "230,255,255");
   });
 }
 
 export function createNeptuneTexture() {
   return createTexture(768, 384, (context) => {
     const gradient = context.createLinearGradient(0, 0, 0, 384);
-    gradient.addColorStop(0, "#2b68ce");
-    gradient.addColorStop(0.46, "#183c9a");
-    gradient.addColorStop(1, "#091e55");
+    gradient.addColorStop(0, "#4f8cff");
+    gradient.addColorStop(0.28, "#2159c9");
+    gradient.addColorStop(0.58, "#12368e");
+    gradient.addColorStop(1, "#071845");
     context.fillStyle = gradient;
     context.fillRect(0, 0, 768, 384);
-    drawBands(
-      context,
-      768,
-      384,
-      ["#315fbd", "#17377e", "#2b5cb6", "#0d2868", "#3b70d4"],
-      0.24,
-    );
-    drawNoise(context, 768, 384, 0.05, "180,210,255");
+    drawBands(context, 768, 384, [
+      "rgba(88,139,245,0.16)",
+      "rgba(18,45,124,0.18)",
+      "rgba(65,111,224,0.12)",
+      "rgba(6,24,77,0.2)",
+      "rgba(70,132,247,0.12)",
+      "rgba(10,36,104,0.14)",
+    ], 0.72);
+    drawNoise(context, 768, 384, 0.055, "160,200,255");
     drawBlob(context, {
-      color: "#1b2f62",
-      height: 22,
-      opacity: 0.46,
+      color: "#08194a",
+      height: 28,
+      opacity: 0.5,
       seed: 91,
-      width: 58,
-      x: 490,
-      y: 218,
+      width: 76,
+      x: 508,
+      y: 224,
     });
     drawBlob(context, {
-      color: "#d3e5ff",
-      height: 9,
-      opacity: 0.22,
+      color: "#cfe4ff",
+      height: 10,
+      opacity: 0.28,
       seed: 92,
-      width: 78,
+      width: 96,
       x: 310,
       y: 126,
+    });
+    drawBlob(context, {
+      color: "#6da7ff",
+      height: 14,
+      opacity: 0.18,
+      seed: 93,
+      width: 130,
+      x: 186,
+      y: 288,
     });
   });
 }
 
 export function createPlutoTexture() {
-  return createTexture(768, 384, (context) => {
-    context.fillStyle = "#9b8873";
-    context.fillRect(0, 0, 768, 384);
-    drawNoise(context, 768, 384, 0.12, "55,45,38");
-    drawNoise(context, 768, 384, 0.08, "240,230,210");
+  return createTexture(1024, 512, (context) => {
+    const gradient = context.createLinearGradient(0, 0, 0, 512);
+    gradient.addColorStop(0, "#c7b89f");
+    gradient.addColorStop(0.5, "#927761");
+    gradient.addColorStop(1, "#514239");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 1024, 512);
+    drawNoise(context, 1024, 512, 0.12, "54,43,37");
+    drawNoise(context, 1024, 512, 0.07, "248,238,224");
 
     [
-      { color: "#d7cfc1", x: 340, y: 170, width: 74, height: 52, seed: 101 },
-      { color: "#6f5748", x: 212, y: 236, width: 96, height: 38, seed: 102 },
-      { color: "#bfa98f", x: 560, y: 120, width: 86, height: 34, seed: 103 },
-      { color: "#efe5d1", x: 438, y: 214, width: 32, height: 22, seed: 104 },
-    ].forEach((blob) => drawBlob(context, { ...blob, opacity: 0.58 }));
+      { color: "rgba(232,220,200,0.56)", height: 82, seed: 101, width: 160, x: 438, y: 218 },
+      { color: "rgba(104,78,64,0.48)", height: 72, seed: 102, width: 232, x: 268, y: 318 },
+      { color: "rgba(188,164,139,0.44)", height: 52, seed: 103, width: 168, x: 742, y: 160 },
+      { color: "rgba(74,56,48,0.42)", height: 48, seed: 104, width: 190, x: 806, y: 345 },
+      { color: "rgba(216,198,169,0.36)", height: 54, seed: 105, width: 136, x: 170, y: 150 },
+      { color: "rgba(244,233,215,0.62)", height: 47, seed: 106, width: 88, x: 520, y: 254 },
+      { color: "rgba(239,226,207,0.52)", height: 36, seed: 107, width: 64, x: 588, y: 235 },
+    ].forEach((blob) => drawSoftPatch(context, blob));
+
+    drawFineCraterField(
+      context,
+      1024,
+      512,
+      74,
+      1800,
+      "rgba(58,44,38,<alpha>)",
+      9,
+      0.72,
+    );
   });
 }

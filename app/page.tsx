@@ -10,6 +10,7 @@ import {
   MISSIONS,
 } from "./data/missions";
 import { SPACE_OBJECTS } from "./data/spaceObjects";
+import { getTourById } from "./data/tours";
 import type {
   ActivePanel,
   CameraCommand,
@@ -24,6 +25,9 @@ import type {
   Mission,
   SelectedTarget,
   SimMode,
+  TourId,
+  TourMode,
+  TourStop,
   ViewLayerState,
   ViewMode,
 } from "./types/space";
@@ -76,7 +80,17 @@ export default function Home() {
   const [explorationLog, setExplorationLog] = useState<ExplorationLogEntry[]>(
     [],
   );
+  const [activeTourId, setActiveTourId] = useState<TourId | null>(null);
+  const [activeTourStopIndex, setActiveTourStopIndex] = useState(0);
+  const [completedTourStopIds, setCompletedTourStopIds] = useState<string[]>(
+    [],
+  );
+  const [tourPanelOpen, setTourPanelOpen] = useState(false);
+  const [tourMode, setTourMode] = useState<TourMode>("idle");
   const cameraCommandNonceRef = useRef(0);
+  const lastLoggedTargetRef = useRef<SelectedTarget>("earth");
+  const activeTour = getTourById(activeTourId);
+  const currentTourStop = activeTour?.stops[activeTourStopIndex] ?? null;
 
   useEffect(() => {
     const hasSeenWelcome = window.localStorage.getItem(
@@ -107,8 +121,8 @@ export default function Home() {
     setShareToast(message);
   }
 
-  function addExplorationLog(
-    missionId: string,
+  function addCaptainLog(
+    refId: string,
     message: string,
     type: ExplorationLogEntry["type"],
   ) {
@@ -120,9 +134,9 @@ export default function Home() {
 
     setExplorationLog((currentLog) => [
       {
-        id: `${missionId}-${type}-${Date.now()}`,
-        missionId,
+        id: `${refId}-${type}-${Date.now()}`,
         message,
+        refId,
         timestamp,
         type,
       },
@@ -165,6 +179,40 @@ export default function Home() {
     }
   }
 
+  function recordTargetLocked(target: SelectedTarget, refId: string = target) {
+    if (lastLoggedTargetRef.current === target) return;
+
+    lastLoggedTargetRef.current = target;
+    addCaptainLog(
+      refId,
+      `TARGET LOCKED — ${SPACE_OBJECTS[target].name.en}.`,
+      "target_locked",
+    );
+  }
+
+  function applyTourStop(stop: TourStop) {
+    setSelectedTarget(stop.target);
+    setExplorationPoint(null);
+    setSelectedMissionId(null);
+    setMissionStepIndex(0);
+    setCameraMode("locked");
+    setLockBehavior("fly");
+    setViewMode(stop.viewMode ?? "solar-system");
+    setViewLayers((currentLayers) => ({
+      ...currentLayers,
+      labels: true,
+      orbits: true,
+      ...(stop.requiredLayers ?? {}),
+    }));
+    issueCameraCommand(stop.cameraMode ?? "focus");
+    recordTargetLocked(stop.target, stop.id);
+    addCaptainLog(
+      stop.id,
+      `STOP FOCUSED — ${stop.title}.`,
+      "tour_stop_focused",
+    );
+  }
+
   function handleSelectTarget(target: SelectedTarget) {
     setLockBehavior("fly");
     setSelectedTarget(target);
@@ -173,6 +221,7 @@ export default function Home() {
     setMissionStepIndex(0);
     setCameraMode("locked");
     issueCameraCommand("focus");
+    recordTargetLocked(target);
   }
 
   function handleLockTarget(target: SelectedTarget) {
@@ -182,6 +231,7 @@ export default function Home() {
     setSelectedMissionId(null);
     setMissionStepIndex(0);
     setCameraMode("locked");
+    recordTargetLocked(target);
   }
 
   function handleToggleCameraMode() {
@@ -216,16 +266,17 @@ export default function Home() {
     setSelectedMissionId(mission.id);
     setMissionStepIndex(0);
     setSelectedTarget(focusTarget);
+    recordTargetLocked(focusTarget, mission.id);
     setExplorationPoint(mission.explorationPoint ?? null);
     setCameraMode("locked");
     setLockBehavior("fly");
     setActivePanel("missions");
     applyMissionViewContext(mission);
     dismissWelcome();
-    addExplorationLog(
+    addCaptainLog(
       mission.id,
-      `任务已启动：${mission.title}`,
-      "started",
+      `MISSION STARTED — ${mission.title}.`,
+      "mission_started",
     );
 
     if (mission.suggestedCameraMode === "overview") {
@@ -249,13 +300,17 @@ export default function Home() {
         : [...currentMissionIds, missionId],
     );
     if (mission && !alreadyCompleted) {
-      addExplorationLog(
+      addCaptainLog(
         missionId,
-        `任务完成：${mission.title}`,
-        "completed",
+        `MISSION COMPLETE — ${mission.title}.`,
+        "mission_completed",
       );
     }
-    showToast("任务完成，已写入 Exploration Log");
+    if (currentTourStop?.recommendedMissionIds.includes(missionId)) {
+      showToast("推荐任务已完成，可以标记本站完成");
+    } else {
+      showToast("任务完成，已写入 Captain's Log");
+    }
   }
 
   function handleAdvanceMissionStep() {
@@ -267,6 +322,7 @@ export default function Home() {
 
     if (currentStep.target) {
       setSelectedTarget(currentStep.target);
+      recordTargetLocked(currentStep.target, mission.id);
     }
 
     if (currentStep.viewMode) {
@@ -288,10 +344,10 @@ export default function Home() {
       issueCameraCommand(currentStep.cameraCommand);
     }
 
-    addExplorationLog(
+    addCaptainLog(
       mission.id,
-      `${currentStep.title}：${currentStep.instruction}`,
-      "step",
+      `MISSION STEP — ${currentStep.title}：${currentStep.instruction}`,
+      "mission_step",
     );
 
     if (missionStepIndex >= steps.length - 1) {
@@ -308,6 +364,122 @@ export default function Home() {
     handleStartMission(
       getRecommendedMission(selectedTarget, completedMissionIds),
     );
+  }
+
+  function handleStartTour(tourId: TourId) {
+    const tour = getTourById(tourId);
+    const firstStop = tour?.stops[0];
+    if (!tour || !firstStop) return;
+
+    setActiveTourId(tour.id);
+    setActiveTourStopIndex(0);
+    setCompletedTourStopIds([]);
+    setTourMode("active");
+    setTourPanelOpen(true);
+    setHudMode("full");
+    setActivePanel("tour");
+    dismissWelcome();
+    addCaptainLog(
+      tour.id,
+      `TOUR STARTED — ${tour.title} initialized.`,
+      "tour_started",
+    );
+    applyTourStop(firstStop);
+    showToast(`${tour.title} 已启动`);
+  }
+
+  function handleFocusTourStop() {
+    if (!currentTourStop) return;
+    applyTourStop(currentTourStop);
+  }
+
+  function handleCompleteTourStop() {
+    if (!activeTour || !currentTourStop) return;
+
+    const isFinalStop = activeTourStopIndex >= activeTour.stops.length - 1;
+    setCompletedTourStopIds((currentIds) =>
+      currentIds.includes(currentTourStop.id)
+        ? currentIds
+        : [...currentIds, currentTourStop.id],
+    );
+    addCaptainLog(
+      currentTourStop.id,
+      `STOP COMPLETE — ${currentTourStop.title}.`,
+      "tour_stop_completed",
+    );
+
+    if (isFinalStop) {
+      setTourMode("completed");
+      addCaptainLog(
+        activeTour.id,
+        `TOUR COMPLETE — ${activeTour.title}.`,
+        "tour_completed",
+      );
+      showToast(`${activeTour.title} complete`);
+      return;
+    }
+
+    const nextStop = activeTour.stops[activeTourStopIndex + 1];
+    showToast(`本站已记录，建议前往下一站：${nextStop.title}`);
+  }
+
+  function handleNextTourStop() {
+    if (!activeTour || !currentTourStop) return;
+
+    if (!completedTourStopIds.includes(currentTourStop.id)) {
+      showToast("Current stop not completed");
+    }
+
+    const nextIndex = activeTourStopIndex + 1;
+    if (nextIndex >= activeTour.stops.length) {
+      handleCompleteTourStop();
+      return;
+    }
+
+    setActiveTourStopIndex(nextIndex);
+    applyTourStop(activeTour.stops[nextIndex]);
+  }
+
+  function handleJumpToTourStop(stopIndex: number) {
+    if (!activeTour?.stops[stopIndex]) return;
+
+    setActiveTourStopIndex(stopIndex);
+    setTourMode("active");
+    setTourPanelOpen(true);
+    applyTourStop(activeTour.stops[stopIndex]);
+    showToast(`Jumped to stop ${stopIndex + 1}`);
+  }
+
+  function handleExitTour() {
+    setActiveTourId(null);
+    setActiveTourStopIndex(0);
+    setTourMode("idle");
+    setTourPanelOpen(false);
+    showToast("Tour exited");
+  }
+
+  function handleRestartTour() {
+    if (!activeTourId) return;
+    handleStartTour(activeTourId);
+  }
+
+  function handleStartTourRecommendedMission() {
+    if (!currentTourStop) {
+      handleStartRecommendedMission();
+      return;
+    }
+
+    const mission =
+      currentTourStop.recommendedMissionIds
+        .map((missionId) => getMissionById(missionId))
+        .find(
+          (candidateMission) =>
+            candidateMission &&
+            !completedMissionIds.includes(candidateMission.id),
+        ) ??
+      getRecommendedMission(currentTourStop.target, completedMissionIds);
+
+    if (mission) handleStartMission(mission);
   }
 
   function handleSelectSearchTarget(target: SelectedTarget) {
@@ -419,19 +591,32 @@ export default function Home() {
         searchOpen={searchOpen}
         shareToast={shareToast}
         simMode={simMode}
+        activeTourId={activeTourId}
+        activeTourStopIndex={activeTourStopIndex}
+        completedTourStopIds={completedTourStopIds}
+        tourMode={tourMode}
+        tourPanelOpen={tourPanelOpen}
         viewLayers={viewLayers}
         viewMode={viewMode}
         welcomeOpen={welcomeOpen}
         onAdvanceMissionStep={handleAdvanceMissionStep}
         onCameraCommand={issueCameraCommand}
         onCompleteMission={handleCompleteMission}
+        onCompleteTourStop={handleCompleteTourStop}
         onDismissWelcome={dismissWelcome}
+        onExitTour={handleExitTour}
+        onFocusTourStop={handleFocusTourStop}
+        onJumpToTourStop={handleJumpToTourStop}
+        onNextTourStop={handleNextTourStop}
         onOpenViewPanel={handleOpenViewPanel}
         onRelatedItem={handleRelatedItem}
+        onRestartTour={handleRestartTour}
         onSelectSearchTarget={handleSelectSearchTarget}
         onShareView={handleShareView}
         onStartMission={handleStartMission}
         onStartRecommendedMission={handleStartRecommendedMission}
+        onStartTour={handleStartTour}
+        onStartTourRecommendedMission={handleStartTourRecommendedMission}
         onToast={showToast}
         onToggleCameraMode={handleToggleCameraMode}
         onToggleFullscreen={handleToggleFullscreen}

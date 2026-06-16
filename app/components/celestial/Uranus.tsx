@@ -27,23 +27,29 @@ export default function Uranus({ active = false, position }: UranusProps) {
       <mesh>
         <sphereGeometry args={[0.86, 56, 56]} />
         <meshStandardMaterial
-          emissive={active ? "#123f4a" : "#07181d"}
-          emissiveIntensity={active ? 0.14 : 0.04}
+          emissive={active ? "#164f5d" : "#07181d"}
+          emissiveIntensity={active ? 0.16 : 0.035}
           map={surfaceTexture}
-          roughness={0.68}
+          roughness={0.62}
         />
       </mesh>
 
-      <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[1.08, 1.34, 144]} />
-        <meshBasicMaterial
-          color="#b8f4ff"
-          depthWrite={false}
-          opacity={active ? 0.18 : 0.08}
-          side={DoubleSide}
-          transparent
-        />
-      </mesh>
+      {[
+        { color: "#e7ffff", inner: 1.04, opacity: 0.12, outer: 1.08 },
+        { color: "#9de8f1", inner: 1.17, opacity: 0.15, outer: 1.21 },
+        { color: "#d6fbff", inner: 1.32, opacity: 0.08, outer: 1.36 },
+      ].map((ring) => (
+        <mesh key={ring.inner} rotation={[Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[ring.inner, ring.outer, 160]} />
+          <meshBasicMaterial
+            color={ring.color}
+            depthWrite={false}
+            opacity={active ? ring.opacity : ring.opacity * 0.42}
+            side={DoubleSide}
+            transparent
+          />
+        </mesh>
+      ))}
 
       <mesh scale={active ? 1.08 : 1.03}>
         <sphereGeometry args={[0.86, 40, 40]} />
@@ -51,7 +57,7 @@ export default function Uranus({ active = false, position }: UranusProps) {
           blending={AdditiveBlending}
           color="#9ff2ff"
           depthWrite={false}
-          opacity={active ? 0.08 : 0.03}
+          opacity={active ? 0.095 : 0.028}
           side={BackSide}
           transparent
         />

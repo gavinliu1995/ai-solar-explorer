@@ -27,10 +27,10 @@ export default function Neptune({ active = false, position }: NeptuneProps) {
       <mesh>
         <sphereGeometry args={[0.88, 56, 56]} />
         <meshStandardMaterial
-          emissive={active ? "#102a67" : "#061331"}
-          emissiveIntensity={active ? 0.16 : 0.05}
+          emissive={active ? "#12337e" : "#061331"}
+          emissiveIntensity={active ? 0.18 : 0.045}
           map={surfaceTexture}
-          roughness={0.66}
+          roughness={0.62}
         />
       </mesh>
 
@@ -40,8 +40,19 @@ export default function Neptune({ active = false, position }: NeptuneProps) {
           blending={AdditiveBlending}
           color="#5ca8ff"
           depthWrite={false}
-          opacity={active ? 0.09 : 0.035}
+          opacity={active ? 0.105 : 0.032}
           side={BackSide}
+          transparent
+        />
+      </mesh>
+
+      <mesh position={[0.38, 0.18, 0.78]} scale={[1.7, 0.54, 0.42]}>
+        <sphereGeometry args={[0.08, 24, 12]} />
+        <meshBasicMaterial
+          blending={AdditiveBlending}
+          color="#b9d7ff"
+          depthWrite={false}
+          opacity={active ? 0.14 : 0.04}
           transparent
         />
       </mesh>
