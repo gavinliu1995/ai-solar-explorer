@@ -1,23 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ARCHIVE_CATEGORY_LABELS,
   ARCHIVE_MISSIONS,
   ARCHIVE_SEARCH_ALIASES,
   getArchiveMissionById,
+  getArchiveMissionCopy,
   getArchiveMissionsForTarget,
+  getDiscoveryCardCopy,
   getDiscoveryCardsForMission,
+  getMissionWaypointCopy,
 } from "@/app/data/archiveMissions";
 import {
   MISSIONS,
+  getMissionCopy,
   getMissionById,
   getMissionSteps,
   getMissionsForTarget,
   getRecommendedMission,
 } from "@/app/data/missions";
 import { SPACE_OBJECTS } from "@/app/data/spaceObjects";
-import { TOURS, getTourById } from "@/app/data/tours";
+import { TOURS, getTourById, getTourCopy, getTourStopCopy } from "@/app/data/tours";
 import type {
   ActivePanel,
   ArchiveExpeditionMode,
@@ -140,8 +144,11 @@ const COPY = {
     aiSubtitle: "Guidance channel",
     aiTitle: "Mission Control",
     autoCruise: "Auto Cruise",
+    allTargets: "Targets",
     close: "Close",
+    clear: "Clear",
     collapseTargets: "Collapse",
+    complete: "Complete",
     completed: "completed",
     completeStop: "Complete Stop",
     celestialContext: "Celestial Context",
@@ -156,6 +163,7 @@ const COPY = {
     detail: "Detail",
     distance: "Distance",
     focusLock: "Focus Lock",
+    focus: "Focus",
     freeExplore: "Free Explore",
     freeInstruction:
       "Mission control: free exploration is enabled. Use mouse, trackpad, or WASD / arrow keys. Lock the nearest target when ready.",
@@ -168,6 +176,7 @@ const COPY = {
     layersOpened: "Layer controls opened",
     live: "LIVE",
     lockNearest: "Lock",
+    locked: "locked",
     manualNav: "Manual Nav",
     menu: "Menu",
     missionActiveInstruction:
@@ -188,6 +197,7 @@ const COPY = {
     resetDone: "Overview restored",
     search: "Search",
     searchPlaceholder: "Search Neptune, Pluto, Kuiper Belt...",
+    searchTargets: "Targets",
     settings: "Settings",
     settingsOpened: "Settings opened",
     share: "Share",
@@ -213,6 +223,7 @@ const COPY = {
     startRecommended: "Start Recommended Mission",
     status: "Status",
     stats: "Stats",
+    step: "Step",
     targetTrayHint: "Horizontal scroll",
     type: "Type",
     view: "View",
@@ -220,10 +231,10 @@ const COPY = {
     visualMode: "Visual Mode",
     visualModeBody: "Local textures when available / procedural fallback",
     welcomeBody:
-      "Begin with one guided mission. Mission Control will give you three steps, track progress, and write your observations into the Exploration Log.",
+      "Begin with one guided mission. Mission Control will give you three steps, track progress, and write your observations into the Captain's Log.",
     welcomeSkip: "Explore Freely",
     welcomeTitle: "Welcome aboard",
-    explorationLog: "Exploration Log",
+    explorationLog: "Captain's Log",
     captainLog: "Captain's Log",
     archives: "Archives",
     archiveCatalog: "Mission Archives",
@@ -232,6 +243,7 @@ const COPY = {
     archiveExpeditionActive: "Expedition Active",
     archiveExpeditionComplete: "Expedition Complete",
     archiveRouteLoaded: "Mission Route Loaded",
+    aboutPrototype: "About Prototype",
     clearRoute: "Clear Route",
     completeExpedition: "Complete Expedition",
     discoveryCards: "Discovery Cards",
@@ -243,10 +255,14 @@ const COPY = {
     primaryTargets: "Primary Targets",
     relatedArchives: "Related Archives",
     routes: "Routes",
+    resetView: "Reset View",
     showMissionRoutes: "Show Mission Routes",
     startExpedition: "Start Expedition",
+    toggleHud: "Toggle HUD",
     viewRoute: "View Route",
     waypoint: "Waypoint",
+    previous: "Previous",
+    next: "Next",
     exitTour: "Exit Tour",
     focusStop: "Focus Current Stop",
     jumpToStop: "Jump to Stop",
@@ -258,29 +274,44 @@ const COPY = {
     solarSystemOverview: "Overview",
     startTour: "Start Tour",
     stopComplete: "Stop complete",
+    stopCount: "stops",
+    stopLabel: "Stop",
     tour: "Tour",
     tourActive: "Tour Active",
+    tourActiveLabel: "TOUR ACTIVE",
     tourCatalog: "Tour Catalog",
+    tourCatalogBody: "Route-based exploration chapters for the solar system.",
     tourComplete:
       "Grand Tour complete. You have completed a full solar system journey.",
+    tourCompleteLabel: "TOUR COMPLETE",
     tourInstruction:
       "Lock the current stop and complete at least one recommended mission, or mark the stop complete and continue.",
+    upcoming: "upcoming",
+    controlSensitivity: "Control Sensitivity",
+    low: "Low",
+    high: "High",
+    diameter: "Diameter",
+    orbitalPeriod: "Orbital Period",
+    notableFeatures: "Notable Features",
   },
   zh: {
     about:
       "寰宇星舟是一个独立教育原型，用于任务引导式太阳系探索，不隶属于 NASA，也不代表 NASA 背书。",
     active: "进行中",
     aiSubtitle: "引导频道",
-    aiTitle: "Mission Control",
+    aiTitle: "任务控制",
     autoCruise: "自动巡航",
+    allTargets: "目标",
     close: "关闭",
+    clear: "清除",
     collapseTargets: "收起",
+    complete: "完成",
     completed: "已完成",
     completeStop: "完成本站",
-    celestialContext: "Celestial Context",
+    celestialContext: "天球参考",
     celestialContextBody:
       "天球模式用于显示星座、黄道和观测方向参考。它帮助你理解太阳系轨道与夜空背景之间的关系。",
-    celestialSphere: "Celestial Sphere",
+    celestialSphere: "天球模式",
     celestialModeMessage:
       "已进入天球参考模式。星座线展示的是从地球附近观察到的方向图案，并不代表恒星之间真实距离相近。",
     currentTarget: "当前目标",
@@ -288,6 +319,7 @@ const COPY = {
     detail: "详情",
     distance: "距离",
     focusLock: "目标锁定",
+    focus: "聚焦",
     freeExplore: "自由探索",
     freeInstruction:
       "任务控制：自由探索模式已启用。可使用鼠标、触控板或 WASD / 方向键移动，靠近目标后锁定最近星体。",
@@ -300,12 +332,13 @@ const COPY = {
     layersOpened: "图层控制已打开",
     live: "实时",
     lockNearest: "锁定",
+    locked: "锁定",
     manualNav: "手动导航",
     menu: "菜单",
     missionActiveInstruction:
-      "请调整视角并观察目标区域。完成后在 Mission Board 中点击 Complete 标记任务完成。",
-    missionBoard: "Mission Board",
-    missionBoardSubtitle: "Mission Control 已为当前目标准备任务引导序列。",
+      "请调整视角并观察目标区域。完成后在任务板中点击“完成”标记任务完成。",
+    missionBoard: "任务板",
+    missionBoardSubtitle: "任务控制已为当前目标准备任务引导序列。",
     missionComplete: "任务完成",
     missionProgress: "任务进度",
     missionTargets: "锁定目标",
@@ -319,6 +352,7 @@ const COPY = {
     resetDone: "总览视角已恢复",
     search: "搜索",
     searchPlaceholder: "搜索 海王星、冥王星、柯伊伯带...",
+    searchTargets: "目标",
     settings: "设置",
     settingsOpened: "设置面板已打开",
     share: "分享",
@@ -334,16 +368,17 @@ const COPY = {
     showStars: "显示星空",
     showZodiac: "显示黄道星座",
     simMode: "模拟模式",
-    solarSystemMode: "Solar System",
+    solarSystemMode: "太阳系",
     sourceBody:
       "视觉贴图可使用公开 NASA/JPL 资源或本地教育用途贴图。寰宇星舟是独立教育原型，不隶属于 NASA，也不代表 NASA 背书。",
     sources: "来源 / 署名",
     speed: "速度",
     standard: "标准",
-    start: "Start Mission",
+    start: "开始任务",
     startRecommended: "开始推荐任务",
     status: "状态",
     stats: "参数",
+    step: "步骤",
     targetTrayHint: "可横向滑动",
     type: "类型",
     view: "视图",
@@ -351,10 +386,10 @@ const COPY = {
     visualMode: "视觉模式",
     visualModeBody: "本地贴图优先 / 缺失时程序化回退",
     welcomeBody:
-      "先完成一个引导任务。Mission Control 会给你 3 个步骤，记录进度，并把观察结果写入 Exploration Log。",
+      "先完成一个引导任务。任务控制会给你 3 个步骤，记录进度，并把观察结果写入航行日志。",
     welcomeSkip: "先自由探索",
     welcomeTitle: "欢迎登舰",
-    explorationLog: "Exploration Log",
+    explorationLog: "航行日志",
     captainLog: "航行日志",
     archives: "档案",
     archiveCatalog: "任务档案馆",
@@ -363,6 +398,7 @@ const COPY = {
     archiveExpeditionActive: "远征进行中",
     archiveExpeditionComplete: "远征完成",
     archiveRouteLoaded: "任务路线已载入",
+    aboutPrototype: "关于原型",
     clearRoute: "清除路线",
     completeExpedition: "完成远征",
     discoveryCards: "发现卡片",
@@ -374,10 +410,14 @@ const COPY = {
     primaryTargets: "主要目标",
     relatedArchives: "相关任务档案",
     routes: "航线",
+    resetView: "太阳系总览",
     showMissionRoutes: "显示任务路线",
     startExpedition: "启动远征",
+    toggleHud: "切换界面",
     viewRoute: "查看路线",
     waypoint: "航点",
+    previous: "上一项",
+    next: "下一项",
     exitTour: "退出路线",
     focusStop: "聚焦本站",
     jumpToStop: "跳转站点",
@@ -392,9 +432,21 @@ const COPY = {
     tour: "路线",
     tourActive: "路线进行中",
     tourCatalog: "路线目录",
-    tourComplete: "Grand Tour complete. 你已经完成一次完整太阳系大巡航。",
+    stopCount: "站",
+    stopLabel: "站点",
+    tourActiveLabel: "路线进行中",
+    tourCatalogBody: "按章节组织的太阳系探索路线。",
+    tourComplete: "太阳系大巡航完成。你已经完成一次完整太阳系路线。",
+    tourCompleteLabel: "路线完成",
     tourInstruction:
       "请锁定当前目标并完成至少一个推荐任务，或直接标记本站完成后前往下一站。",
+    upcoming: "未到达",
+    controlSensitivity: "控制灵敏度",
+    low: "低",
+    high: "高",
+    diameter: "直径",
+    orbitalPeriod: "轨道周期",
+    notableFeatures: "主要特征",
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -550,7 +602,7 @@ export default function Hud({
           ? "PAUSED"
           : "REAL RATE";
     setSimMode(nextMode);
-    onToast(`模拟模式：${nextMode}`);
+    onToast(`${copy.simMode}: ${formatSimMode(nextMode, language)}`);
   }
 
   if (hudMode === "hidden") {
@@ -582,6 +634,12 @@ export default function Hud({
           nearestTargetLabel={nearestTargetLabel}
           onCameraCommand={onCameraCommand}
           onMenuNotice={setMenuNotice}
+          onOpenLog={() => {
+            setHudMode("full");
+            setLeftPanelCollapsed(false);
+            setActivePanel("missions");
+            onToast(copy.captainLog);
+          }}
           onSearch={() => {
             setSearchOpen(!searchOpen);
             setMenuOpen(false);
@@ -804,6 +862,7 @@ function TopNavigation({
   nearestTargetLabel,
   onCameraCommand,
   onMenuNotice,
+  onOpenLog,
   onSearch,
   onShareView,
   onToggleCameraMode,
@@ -821,6 +880,7 @@ function TopNavigation({
   nearestTargetLabel: string;
   onCameraCommand: (command: CameraCommandType) => void;
   onMenuNotice: (notice: string | null) => void;
+  onOpenLog: () => void;
   onSearch: () => void;
   onShareView: () => void;
   onToggleCameraMode: () => void;
@@ -858,7 +918,11 @@ function TopNavigation({
           nearestTargetLabel={nearestTargetLabel}
           onClick={onToggleCameraMode}
         />
-        <HudModeButton hudMode={hudMode} onClick={onToggleHudMode} />
+        <HudModeButton
+          hudMode={hudMode}
+          language={language}
+          onClick={onToggleHudMode}
+        />
 
         {menuOpen ? (
           <MenuPopover
@@ -866,6 +930,7 @@ function TopNavigation({
             menuNotice={menuNotice}
             onAbout={() => onMenuNotice(copy.about)}
             onKeyboard={() => onMenuNotice(copy.keyboard)}
+            onOpenLog={onOpenLog}
             onReset={() => {
               onCameraCommand("solarSystemOverview");
               onMenuNotice(copy.resetDone);
@@ -917,7 +982,11 @@ function MinimalNavigation({
           nearestTargetLabel={nearestTargetLabel}
           onClick={onToggleCameraMode}
         />
-        <HudModeButton hudMode={hudMode} onClick={onToggleHudMode} />
+        <HudModeButton
+          hudMode={hudMode}
+          language={language}
+          onClick={onToggleHudMode}
+        />
       </div>
     </header>
   );
@@ -977,16 +1046,18 @@ function LanguageButton({
       onClick={onClick}
       className="border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300 transition hover:border-emerald-300/40 hover:text-emerald-100 active:scale-[0.98]"
     >
-      {language === "zh" ? "中文 / EN" : "EN / 中文"}
+      {language === "zh" ? "EN" : "中文"}
     </button>
   );
 }
 
 function HudModeButton({
   hudMode,
+  language,
   onClick,
 }: {
   hudMode: HudMode;
+  language: Language;
   onClick: () => void;
 }) {
   return (
@@ -995,7 +1066,7 @@ function HudModeButton({
       onClick={onClick}
       className="border border-cyan-300/35 bg-cyan-950/20 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-200 active:scale-[0.98]"
     >
-      HUD: {hudMode}
+      {language === "zh" ? "界面" : "HUD"}: {formatHudMode(hudMode, language)}
     </button>
   );
 }
@@ -1005,6 +1076,7 @@ function MenuPopover({
   menuNotice,
   onAbout,
   onKeyboard,
+  onOpenLog,
   onReset,
   onToggleHud,
 }: {
@@ -1012,16 +1084,18 @@ function MenuPopover({
   menuNotice: string | null;
   onAbout: () => void;
   onKeyboard: () => void;
+  onOpenLog: () => void;
   onReset: () => void;
   onToggleHud: () => void;
 }) {
   return (
     <div className="absolute right-0 top-12 w-72 border border-white/10 bg-black/82 p-3 shadow-[0_0_38px_rgba(2,6,23,0.8)] backdrop-blur-2xl">
       {[
-        ["About Prototype", onAbout],
+        [copy.aboutPrototype, onAbout],
         [copy.shortcuts, onKeyboard],
-        ["Reset View", onReset],
-        ["Toggle HUD", onToggleHud],
+        [copy.captainLog, onOpenLog],
+        [copy.resetView, onReset],
+        [copy.toggleHud, onToggleHud],
       ].map(([label, handler]) => (
         <button
           key={label as string}
@@ -1069,11 +1143,13 @@ function SearchOverlay({
   });
   const archiveResults = ARCHIVE_MISSIONS.filter((mission) => {
     const aliases = ARCHIVE_SEARCH_ALIASES[mission.id];
+    const missionCopy = getArchiveMissionCopy(mission, language);
 
     return (
       !normalizedQuery ||
       mission.name.toLowerCase().includes(normalizedQuery) ||
       mission.subtitle.toLowerCase().includes(normalizedQuery) ||
+      missionCopy.subtitle.toLowerCase().includes(normalizedQuery) ||
       aliases.some((alias) => alias.toLowerCase().includes(normalizedQuery))
     );
   });
@@ -1109,7 +1185,7 @@ function SearchOverlay({
       <div className="mt-3 grid max-h-[52vh] gap-4 overflow-y-auto">
         <section>
           <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-            Targets
+            {copy.searchTargets}
           </p>
           <div className="grid gap-2">
             {results.map((target) => (
@@ -1129,7 +1205,10 @@ function SearchOverlay({
             {copy.missionArchives}
           </p>
           <div className="grid gap-2">
-            {archiveResults.map((mission) => (
+            {archiveResults.map((mission) => {
+              const missionCopy = getArchiveMissionCopy(mission, language);
+
+              return (
               <button
                 key={mission.id}
                 type="button"
@@ -1140,10 +1219,11 @@ function SearchOverlay({
                   {mission.name}
                 </span>
                 <span className="mt-1 block text-[11px] leading-4 text-slate-500">
-                  {mission.subtitle}
+                  {missionCopy.subtitle}
                 </span>
               </button>
-            ))}
+              );
+            })}
           </div>
         </section>
       </div>
@@ -1164,6 +1244,8 @@ function WelcomeOverlay({
   onDismiss: () => void;
   onStartRecommendedMission: () => void;
 }) {
+  const recommendedMissionCopy = getMissionCopy(recommendedMission, language);
+
   return (
     <section className="pointer-events-auto absolute left-1/2 top-24 w-[min(92vw,520px)] -translate-x-1/2 border border-cyan-300/25 bg-black/72 p-5 shadow-[0_0_44px_rgba(8,145,178,0.18)] backdrop-blur-2xl">
       <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-100">
@@ -1180,10 +1262,10 @@ function WelcomeOverlay({
           {copy.nextMission}
         </p>
         <h2 className="mt-2 text-base font-semibold text-slate-100">
-          {recommendedMission.title}
+          {recommendedMissionCopy.title}
         </h2>
         <p className="mt-2 text-xs leading-5 text-slate-400">
-          {recommendedMission.objective}
+          {recommendedMissionCopy.objective}
         </p>
       </div>
       <div className="mt-5 flex gap-3">
@@ -1311,6 +1393,21 @@ function LeftPanel({
   setViewLayers: (layers: ViewLayerState) => void;
   setViewMode: (mode: ViewMode) => void;
 }) {
+  const tabScrollerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const activeTab =
+      tabScrollerRef.current?.querySelector<HTMLButtonElement>(
+        `[data-panel="${activePanel}"]`,
+      );
+
+    activeTab?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [activePanel, collapsed]);
+
   if (collapsed) {
     return (
       <button
@@ -1339,22 +1436,31 @@ function LeftPanel({
         </button>
       </div>
 
-      <div className="flex border-b border-white/10">
-        {(["info", "missions", "tour", "archives", "view"] as ActivePanel[]).map((panel) => (
-          <button
-            key={panel}
-            type="button"
-            onClick={() => setActivePanel(panel)}
-            className={[
-              "flex-1 border-r border-white/10 px-3 py-2 text-[10px] uppercase tracking-[0.14em] transition last:border-r-0",
-              activePanel === panel
-                ? "bg-cyan-950/35 text-cyan-100"
-                : "text-slate-400 hover:text-slate-100",
-            ].join(" ")}
-          >
-            {getPanelLabel(panel, copy)}
-          </button>
-        ))}
+      <div className="relative border-b border-white/10">
+        <div
+          ref={tabScrollerRef}
+          className="flex overflow-x-auto overscroll-x-contain [scrollbar-color:rgba(34,211,238,0.45)_rgba(15,23,42,0.35)] [scrollbar-width:thin]"
+        >
+          {(
+            ["info", "missions", "tour", "archives", "view"] as ActivePanel[]
+          ).map((panel) => (
+            <button
+              key={panel}
+              type="button"
+              data-panel={panel}
+              onClick={() => setActivePanel(panel)}
+              className={[
+                "min-w-[104px] shrink-0 whitespace-nowrap border-r border-white/10 px-3 py-2 text-[10px] uppercase tracking-[0.14em] transition last:border-r-0",
+                activePanel === panel
+                  ? "bg-cyan-950/35 text-cyan-100"
+                  : "text-slate-400 hover:text-slate-100",
+              ].join(" ")}
+            >
+              {getPanelLabel(panel, copy)}
+            </button>
+          ))}
+        </div>
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-black/80 to-transparent" />
       </div>
 
       <div className="overflow-y-auto p-4">
@@ -1375,6 +1481,7 @@ function LeftPanel({
             completedMissionIds={completedMissionIds}
             copy={copy}
             explorationLog={explorationLog}
+            language={language}
             missionStepIndex={missionStepIndex}
             recommendedMission={recommendedMission}
             selectedMissionId={selectedMissionId}
@@ -1422,6 +1529,7 @@ function LeftPanel({
           <ViewTab
             controlSensitivity={controlSensitivity}
             copy={copy}
+            language={language}
             simMode={simMode}
             viewLayers={viewLayers}
             viewMode={viewMode}
@@ -1478,7 +1586,7 @@ function InfoTab({
             {info.name[language]}
           </h1>
           <span className="border border-emerald-300/30 bg-emerald-950/20 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-100">
-            LOCKED
+            {copy.locked}
           </span>
         </div>
         <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
@@ -1572,6 +1680,7 @@ function MissionsTab({
   completedMissionIds,
   copy,
   explorationLog,
+  language,
   missionStepIndex,
   recommendedMission,
   selectedMissionId,
@@ -1584,6 +1693,7 @@ function MissionsTab({
   completedMissionIds: string[];
   copy: (typeof COPY)[Language];
   explorationLog: ExplorationLogEntry[];
+  language: Language;
   missionStepIndex: number;
   recommendedMission: Mission;
   selectedMissionId: string | null;
@@ -1596,7 +1706,7 @@ function MissionsTab({
   const missions = getMissionsForTarget(selectedTarget);
   const selectedMission = getMissionById(selectedMissionId);
   const selectedMissionSteps = selectedMission
-    ? getMissionSteps(selectedMission)
+    ? getMissionSteps(selectedMission, language)
     : [];
   const selectedMissionCompleted = selectedMission
     ? completedMissionIds.includes(selectedMission.id)
@@ -1631,6 +1741,7 @@ function MissionsTab({
         <ActiveMissionStepCard
           completed={completedMissionIds.includes(selectedMission.id)}
           copy={copy}
+          language={language}
           mission={selectedMission}
           missionStepIndex={missionStepIndex}
           steps={selectedMissionSteps}
@@ -1640,6 +1751,7 @@ function MissionsTab({
       ) : (
         <RecommendedMissionCard
           copy={copy}
+          language={language}
           mission={recommendedMission}
           onStartMission={onStartMission}
         />
@@ -1648,12 +1760,14 @@ function MissionsTab({
       {selectedMission && selectedMissionCompleted ? (
         <RecommendedMissionCard
           copy={copy}
+          language={language}
           mission={recommendedMission}
           onStartMission={onStartMission}
         />
       ) : null}
 
       {missions.map((mission) => {
+        const missionCopy = getMissionCopy(mission, language);
         const status = getMissionStatus(
           mission.id,
           selectedMissionId,
@@ -1678,7 +1792,7 @@ function MissionsTab({
           >
             <div className="flex items-start justify-between gap-3">
               <h3 className="text-sm font-semibold text-slate-100">
-                {mission.title}
+                {missionCopy.title}
               </h3>
               <span
                 className={[
@@ -1694,7 +1808,7 @@ function MissionsTab({
                   ? copy.active
                   : status === "completed"
                     ? copy.completed
-                    : "locked"}
+                    : copy.locked}
               </span>
             </div>
             {recommendedForTour ? (
@@ -1703,10 +1817,10 @@ function MissionsTab({
               </p>
             ) : null}
             <p className="mt-2 text-xs leading-5 text-slate-500">
-              {mission.description}
+              {missionCopy.description}
             </p>
             <p className="mt-2 text-xs leading-5 text-slate-300">
-              {mission.objective}
+              {missionCopy.objective}
             </p>
             <div className="mt-3 flex gap-2">
               <button
@@ -1727,7 +1841,7 @@ function MissionsTab({
                     : "border-emerald-300/30 bg-emerald-950/18 text-emerald-100 hover:border-emerald-200 active:scale-[0.98]",
                 ].join(" ")}
               >
-                Complete
+                {copy.complete}
               </button>
             </div>
           </article>
@@ -1737,6 +1851,7 @@ function MissionsTab({
       <ExplorationLogPanel
         copy={copy}
         explorationLog={explorationLog}
+        language={language}
       />
     </div>
   );
@@ -1776,23 +1891,27 @@ function MissionProgress({
 
 function RecommendedMissionCard({
   copy,
+  language,
   mission,
   onStartMission,
 }: {
   copy: (typeof COPY)[Language];
+  language: Language;
   mission: Mission;
   onStartMission: (mission: Mission) => void;
 }) {
+  const missionCopy = getMissionCopy(mission, language);
+
   return (
     <article className="border border-emerald-300/20 bg-emerald-950/12 p-3">
       <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">
         {copy.nextMission}
       </p>
       <h3 className="mt-2 text-sm font-semibold text-slate-100">
-        {mission.title}
+        {missionCopy.title}
       </h3>
       <p className="mt-2 text-xs leading-5 text-slate-400">
-        {mission.objective}
+        {missionCopy.objective}
       </p>
       <button
         type="button"
@@ -1808,6 +1927,7 @@ function RecommendedMissionCard({
 function ActiveMissionStepCard({
   completed,
   copy,
+  language,
   mission,
   missionStepIndex,
   steps,
@@ -1816,6 +1936,7 @@ function ActiveMissionStepCard({
 }: {
   completed: boolean;
   copy: (typeof COPY)[Language];
+  language: Language;
   mission: Mission;
   missionStepIndex: number;
   steps: MissionStep[];
@@ -1825,16 +1946,17 @@ function ActiveMissionStepCard({
   const boundedStepIndex = Math.min(missionStepIndex, steps.length - 1);
   const currentStep = steps[boundedStepIndex];
   const stepNumber = boundedStepIndex + 1;
+  const missionCopy = getMissionCopy(mission, language);
 
   return (
     <article className="border border-cyan-300/35 bg-cyan-950/18 p-3 shadow-[0_0_22px_rgba(34,211,238,0.12)]">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-100">
-            Active Mission Step {stepNumber}/3
+            {copy.step} {stepNumber}/3
           </p>
           <h3 className="mt-2 text-sm font-semibold text-slate-100">
-            {mission.title}
+            {missionCopy.title}
           </h3>
         </div>
         <span className="border border-cyan-300/35 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-cyan-100">
@@ -1885,7 +2007,7 @@ function ActiveMissionStepCard({
               : "border-emerald-300/30 bg-emerald-950/18 text-emerald-100 hover:border-emerald-200 active:scale-[0.98]",
           ].join(" ")}
         >
-          Complete
+          {copy.complete}
         </button>
       </div>
     </article>
@@ -1895,9 +2017,11 @@ function ActiveMissionStepCard({
 function ExplorationLogPanel({
   copy,
   explorationLog,
+  language,
 }: {
   copy: (typeof COPY)[Language];
   explorationLog: ExplorationLogEntry[];
+  language: Language;
 }) {
   return (
     <section className="border border-white/10 bg-black/28 p-3">
@@ -1916,7 +2040,7 @@ function ExplorationLogPanel({
               <div className="mb-1 flex items-center justify-between gap-2">
                 <span className="uppercase tracking-[0.14em] text-slate-500">
                   [{String(index + 1).padStart(3, "0")}]{" "}
-                  {formatLogEvent(entry.type)}
+                  {formatLogEvent(entry.type, language)}
                 </span>
                 <span className="font-mono text-[10px] text-slate-600">
                   {entry.timestamp}
@@ -1970,49 +2094,55 @@ function TourTab({
             {copy.tourCatalog}
           </p>
           <p className="mt-2 text-xs leading-5 text-slate-400">
-            Route-based exploration chapters for the solar system.
+            {copy.tourCatalogBody}
           </p>
         </div>
-        {TOURS.map((tour) => (
-          <article
-            key={tour.id}
-            className="border border-white/10 bg-white/[0.03] p-3"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-100">
-                  {tour.title}
-                </h2>
-                <p className="mt-1 text-xs text-cyan-100/75">
-                  {tour.subtitle}
-                </p>
+        {TOURS.map((tour) => {
+          const tourCopy = getTourCopy(tour, language);
+
+          return (
+            <article
+              key={tour.id}
+              className="border border-white/10 bg-white/[0.03] p-3"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-100">
+                    {tourCopy.title}
+                  </h2>
+                  <p className="mt-1 text-xs text-cyan-100/75">
+                    {tourCopy.subtitle}
+                  </p>
+                </div>
+                <span className="border border-white/10 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-slate-500">
+                  {tour.stops.length} {copy.stopCount}
+                </span>
               </div>
-              <span className="border border-white/10 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-slate-500">
-                {tour.stops.length} stops
-              </span>
-            </div>
-            <p className="mt-2 text-xs leading-5 text-slate-400">
-              {tour.description}
-            </p>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                {tour.estimatedDuration}
-              </span>
-              <button
-                type="button"
-                onClick={() => onStartTour(tour.id)}
-                className="border border-cyan-300/35 bg-cyan-950/20 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-100 transition hover:border-cyan-200 active:scale-[0.98]"
-              >
-                {copy.startTour}
-              </button>
-            </div>
-          </article>
-        ))}
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                {tourCopy.description}
+              </p>
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                  {tourCopy.estimatedDuration}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onStartTour(tour.id)}
+                  className="border border-cyan-300/35 bg-cyan-950/20 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-100 transition hover:border-cyan-200 active:scale-[0.98]"
+                >
+                  {copy.startTour}
+                </button>
+              </div>
+            </article>
+          );
+        })}
       </div>
     );
   }
 
   const currentStop = activeTour.stops[activeTourStopIndex];
+  const activeTourCopy = getTourCopy(activeTour, language);
+  const currentStopCopy = getTourStopCopy(currentStop, language);
   const progressPercent =
     activeTour.stops.length > 0
       ? ((activeTourStopIndex + 1) / activeTour.stops.length) * 100
@@ -2027,14 +2157,14 @@ function TourTab({
               {copy.tourActive}
             </p>
             <h2 className="mt-2 text-lg font-semibold text-white">
-              {activeTour.title}
+              {activeTourCopy.title}
             </h2>
             <p className="mt-1 text-xs text-slate-400">
-              Stop {activeTourStopIndex + 1}/{activeTour.stops.length}
+              {copy.stopLabel} {activeTourStopIndex + 1}/{activeTour.stops.length}
             </p>
           </div>
           <span className="border border-emerald-300/30 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-emerald-100">
-            {tourMode}
+            {formatTourMode(tourMode, language)}
           </span>
         </div>
         <div className="mt-3 h-1.5 border border-white/10 bg-black/40">
@@ -2050,13 +2180,13 @@ function TourTab({
           {SPACE_OBJECTS[currentStop.target].name[language]}
         </p>
         <h3 className="mt-2 text-base font-semibold text-slate-100">
-          {currentStop.title}
+          {currentStopCopy.title}
         </h3>
         <p className="mt-1 text-xs text-cyan-100/75">
-          {currentStop.subtitle}
+          {currentStopCopy.subtitle}
         </p>
         <p className="mt-3 text-xs leading-5 text-slate-300">
-          {currentStop.objective}
+          {currentStopCopy.objective}
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
@@ -2110,6 +2240,7 @@ function TourTab({
         {activeTour.stops.map((stop, index) => {
           const completed = completedTourStopIds.includes(stop.id);
           const active = index === activeTourStopIndex;
+          const stopCopy = getTourStopCopy(stop, language);
 
           return (
             <button
@@ -2127,10 +2258,14 @@ function TourTab({
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-slate-200">
-                  {index + 1}. {stop.title}
+                  {index + 1}. {stopCopy.title}
                 </span>
                 <span className="text-[9px] uppercase tracking-[0.14em] text-slate-500">
-                  {completed ? "complete" : active ? "active" : "upcoming"}
+                  {completed
+                    ? copy.completed
+                    : active
+                      ? copy.active
+                      : copy.upcoming}
                 </span>
               </div>
               <p className="mt-1 text-[11px] text-slate-500">
@@ -2225,55 +2360,59 @@ function ArchivesTab({
           ))}
         </div>
         <div className="grid max-h-[62vh] gap-3 overflow-y-auto pr-1">
-          {missions.map((mission) => (
-            <article
-              key={mission.id}
-              className="border border-white/10 bg-white/[0.03] p-3 transition hover:border-cyan-300/30"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-100">
-                    {mission.name}
-                  </h2>
-                  <p className="mt-1 text-xs text-cyan-100/70">
-                    {mission.subtitle}
-                  </p>
-                </div>
-                <span className="border border-white/10 px-2 py-1 text-[8px] uppercase tracking-[0.12em] text-slate-500">
-                  {ARCHIVE_CATEGORY_LABELS[mission.category][language]}
-                </span>
-              </div>
-              <p className="mt-2 text-xs leading-5 text-slate-400">
-                {mission.shortDescription}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {mission.primaryTargets.map((target) => (
-                  <span
-                    key={target}
-                    className="border border-cyan-300/15 bg-cyan-950/15 px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-cyan-100/75"
-                  >
-                    {SPACE_OBJECTS[target].name[language]}
+          {missions.map((mission) => {
+            const missionCopy = getArchiveMissionCopy(mission, language);
+
+            return (
+              <article
+                key={mission.id}
+                className="border border-white/10 bg-white/[0.03] p-3 transition hover:border-cyan-300/30"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-100">
+                      {mission.name}
+                    </h2>
+                    <p className="mt-1 text-xs text-cyan-100/70">
+                      {missionCopy.subtitle}
+                    </p>
+                  </div>
+                  <span className="border border-white/10 px-2 py-1 text-[8px] uppercase tracking-[0.12em] text-slate-500">
+                    {ARCHIVE_CATEGORY_LABELS[mission.category][language]}
                   </span>
-                ))}
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => onViewArchiveRoute(mission.id)}
-                  className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100 transition hover:border-cyan-200"
-                >
-                  {copy.viewRoute}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onStartArchiveExpedition(mission.id)}
-                  className="border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-100 transition hover:border-emerald-200"
-                >
-                  {copy.startExpedition}
-                </button>
-              </div>
-            </article>
-          ))}
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-400">
+                  {missionCopy.shortDescription}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {mission.primaryTargets.map((target) => (
+                    <span
+                      key={target}
+                      className="border border-cyan-300/15 bg-cyan-950/15 px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-cyan-100/75"
+                    >
+                      {SPACE_OBJECTS[target].name[language]}
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onViewArchiveRoute(mission.id)}
+                    className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100 transition hover:border-cyan-200"
+                  >
+                    {copy.viewRoute}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onStartArchiveExpedition(mission.id)}
+                    className="border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-100 transition hover:border-emerald-200"
+                  >
+                    {copy.startExpedition}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </div>
     );
@@ -2282,6 +2421,8 @@ function ArchivesTab({
   const currentWaypoint =
     selectedArchiveMission.waypoints[currentArchiveWaypointIndex] ??
     selectedArchiveMission.waypoints[0];
+  const archiveCopy = getArchiveMissionCopy(selectedArchiveMission, language);
+  const currentWaypointCopy = getMissionWaypointCopy(currentWaypoint, language);
   const discoveries = getDiscoveryCardsForMission(selectedArchiveMission.id);
   const finalWaypoint =
     currentArchiveWaypointIndex >= selectedArchiveMission.waypoints.length - 1;
@@ -2298,25 +2439,24 @@ function ArchivesTab({
               {selectedArchiveMission.name}
             </h2>
             <p className="mt-1 text-xs text-cyan-100/70">
-              {selectedArchiveMission.subtitle}
+              {archiveCopy.subtitle}
             </p>
           </div>
           <span className="border border-emerald-300/30 px-2 py-1 text-[8px] uppercase tracking-[0.12em] text-emerald-100">
-            {archiveExpeditionMode}
+            {formatArchiveExpeditionMode(archiveExpeditionMode, language)}
           </span>
         </div>
         <p className="mt-3 text-xs leading-5 text-slate-300">
-          {selectedArchiveMission.longDescription}
+          {archiveCopy.longDescription}
         </p>
         <p className="mt-2 text-[11px] leading-5 text-slate-500">
-          {selectedArchiveMission.disclaimer ?? copy.archiveDisclaimer}
+          {archiveCopy.disclaimer ?? copy.archiveDisclaimer}
         </p>
       </div>
 
       <section className="border border-white/10 bg-white/[0.03] p-3">
         <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
-          {selectedArchiveMission.agencyLabel} ·{" "}
-          {selectedArchiveMission.statusLabel}
+          {archiveCopy.agencyLabel} · {archiveCopy.statusLabel}
         </p>
         <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-cyan-100">
           {copy.primaryTargets}
@@ -2343,7 +2483,7 @@ function ArchivesTab({
               {selectedArchiveMission.waypoints.length}
             </p>
             <h3 className="mt-2 text-sm font-semibold text-slate-100">
-              {currentWaypoint.label}
+              {currentWaypointCopy.label}
             </h3>
           </div>
           <span className="border border-white/10 px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-slate-500">
@@ -2351,7 +2491,7 @@ function ArchivesTab({
           </span>
         </div>
         <p className="mt-2 text-xs leading-5 text-slate-300">
-          {currentWaypoint.description}
+          {currentWaypointCopy.description}
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
@@ -2378,20 +2518,13 @@ function ArchivesTab({
           </button>
           <button
             type="button"
-            onClick={onNextArchiveWaypoint}
+            onClick={
+              finalWaypoint ? onCompleteArchiveExpedition : onNextArchiveWaypoint
+            }
             className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-100 transition hover:border-cyan-200"
           >
             {finalWaypoint ? copy.completeExpedition : copy.nextWaypoint}
           </button>
-          {finalWaypoint ? (
-            <button
-              type="button"
-              onClick={onCompleteArchiveExpedition}
-              className="col-span-2 border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-100 transition hover:border-emerald-200"
-            >
-              {copy.completeExpedition}
-            </button>
-          ) : null}
           <button
             type="button"
             onClick={onClearArchiveRoute}
@@ -2405,6 +2538,7 @@ function ArchivesTab({
       <section className="grid max-h-52 gap-2 overflow-y-auto">
         {selectedArchiveMission.waypoints.map((waypoint, index) => {
           const active = index === currentArchiveWaypointIndex;
+          const waypointCopy = getMissionWaypointCopy(waypoint, language);
 
           return (
             <button
@@ -2420,14 +2554,14 @@ function ArchivesTab({
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-slate-200">
-                  {index + 1}. {waypoint.label}
+                  {index + 1}. {waypointCopy.label}
                 </span>
                 <span className="text-[9px] uppercase tracking-[0.14em] text-slate-500">
                   {SPACE_OBJECTS[waypoint.target].name[language]}
                 </span>
               </div>
               <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                {waypoint.description}
+                {waypointCopy.description}
               </p>
             </button>
           );
@@ -2439,7 +2573,7 @@ function ArchivesTab({
           {copy.keyDiscoveries}
         </p>
         <ul className="mt-3 grid gap-2 text-xs leading-5 text-slate-300">
-          {selectedArchiveMission.keyDiscoveries.map((item) => (
+          {archiveCopy.keyDiscoveries.map((item) => (
             <li key={item} className="border-l border-cyan-300/30 pl-3">
               {item}
             </li>
@@ -2451,24 +2585,28 @@ function ArchivesTab({
         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
           {copy.discoveryCards}
         </p>
-        {discoveries.map((card) => (
-          <button
-            key={card.id}
-            type="button"
-            onClick={() => onSelectTarget(card.relatedTarget)}
-            className="border border-white/10 bg-white/[0.03] p-3 text-left transition hover:border-emerald-300/35"
-          >
-            <span className="block text-sm font-semibold text-slate-100">
-              {card.title}
-            </span>
-            <span className="mt-2 block text-xs leading-5 text-slate-400">
-              {card.body}
-            </span>
-            <span className="mt-2 block text-[9px] uppercase tracking-[0.14em] text-emerald-200">
-              {SPACE_OBJECTS[card.relatedTarget].name[language]}
-            </span>
-          </button>
-        ))}
+        {discoveries.map((card) => {
+          const cardCopy = getDiscoveryCardCopy(card, language);
+
+          return (
+            <button
+              key={card.id}
+              type="button"
+              onClick={() => onSelectTarget(card.relatedTarget)}
+              className="border border-white/10 bg-white/[0.03] p-3 text-left transition hover:border-emerald-300/35"
+            >
+              <span className="block text-sm font-semibold text-slate-100">
+                {cardCopy.title}
+              </span>
+              <span className="mt-2 block text-xs leading-5 text-slate-400">
+                {cardCopy.body}
+              </span>
+              <span className="mt-2 block text-[9px] uppercase tracking-[0.14em] text-emerald-200">
+                {SPACE_OBJECTS[card.relatedTarget].name[language]}
+              </span>
+            </button>
+          );
+        })}
       </section>
     </div>
   );
@@ -2477,6 +2615,7 @@ function ArchivesTab({
 function ViewTab({
   controlSensitivity,
   copy,
+  language,
   simMode,
   viewLayers,
   viewMode,
@@ -2487,6 +2626,7 @@ function ViewTab({
 }: {
   controlSensitivity: ControlSensitivity;
   copy: (typeof COPY)[Language];
+  language: Language;
   simMode: SimMode;
   viewLayers: ViewLayerState;
   viewMode: ViewMode;
@@ -2591,7 +2731,7 @@ function ViewTab({
                   : "border-white/10 bg-black/20 text-slate-500 hover:border-cyan-300/35 hover:text-slate-200",
               ].join(" ")}
             >
-              {mode}
+              {formatSimMode(mode, language)}
             </button>
           ))}
         </div>
@@ -2599,14 +2739,14 @@ function ViewTab({
 
       <div className="border border-white/10 bg-white/[0.03] p-3">
         <p className="mb-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
-          控制灵敏度
+          {copy.controlSensitivity}
         </p>
         <div className="grid grid-cols-3 gap-1">
           {(
             [
-              ["low", "低"],
+              ["low", copy.low],
               ["normal", copy.standard],
-              ["high", "高"],
+              ["high", copy.high],
             ] as Array<[ControlSensitivity, string]>
           ).map(([value, label]) => (
             <button
@@ -2735,6 +2875,17 @@ function AssistantPanel({
   const currentTourStop = activeTour?.stops[activeTourStopIndex] ?? null;
   const currentArchiveWaypoint =
     selectedArchiveMission?.waypoints[currentArchiveWaypointIndex] ?? null;
+  const missionCopy = mission ? getMissionCopy(mission, language) : null;
+  const activeTourCopy = activeTour ? getTourCopy(activeTour, language) : null;
+  const currentTourStopCopy = currentTourStop
+    ? getTourStopCopy(currentTourStop, language)
+    : null;
+  const archiveCopy = selectedArchiveMission
+    ? getArchiveMissionCopy(selectedArchiveMission, language)
+    : null;
+  const currentArchiveWaypointCopy = currentArchiveWaypoint
+    ? getMissionWaypointCopy(currentArchiveWaypoint, language)
+    : null;
   const missionCompleted = mission
     ? completedMissionIds.includes(mission.id)
     : false;
@@ -2756,6 +2907,9 @@ function AssistantPanel({
     activeTour && activeTourStopIndex + 1 < activeTour.stops.length
       ? activeTour.stops[activeTourStopIndex + 1]
       : null;
+  const nextTourStopCopy = nextTourStop
+    ? getTourStopCopy(nextTourStop, language)
+    : null;
 
   return (
     <aside className="pointer-events-auto absolute bottom-24 right-24 w-[min(31vw,350px)] border border-white/10 bg-black/48 p-4 shadow-[0_0_28px_rgba(8,145,178,0.12)] backdrop-blur-xl">
@@ -2768,9 +2922,9 @@ function AssistantPanel({
             {archiveExpeditionMode === "active" && selectedArchiveMission
               ? selectedArchiveMission.name
               : currentTourStop
-              ? `${activeTour?.title} ${activeTourStopIndex + 1}/${activeTour?.stops.length}`
+              ? `${activeTourCopy?.title} ${activeTourStopIndex + 1}/${activeTour?.stops.length}`
               : mission
-                ? mission.title
+                ? missionCopy?.title
                 : copy.aiSubtitle}
           </p>
         </div>
@@ -2778,6 +2932,8 @@ function AssistantPanel({
       </div>
       {selectedArchiveMission &&
       currentArchiveWaypoint &&
+      archiveCopy &&
+      currentArchiveWaypointCopy &&
       (archiveExpeditionMode !== "idle" || !currentTourStop) ? (
         <div className="mt-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-100">
@@ -2793,15 +2949,15 @@ function AssistantPanel({
           <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-slate-500">
             {copy.waypoint} {currentArchiveWaypointIndex + 1}/
             {selectedArchiveMission.waypoints.length} ·{" "}
-            {currentArchiveWaypoint.label}
+            {currentArchiveWaypointCopy.label}
           </p>
           <p className="mt-2 text-sm leading-6 text-slate-300">
             {archiveExpeditionMode === "completed"
               ? `${copy.archiveExpeditionComplete}：${selectedArchiveMission.name}。`
-              : currentArchiveWaypoint.description}
+              : currentArchiveWaypointCopy.description}
           </p>
           <p className="mt-2 text-[11px] leading-5 text-slate-500">
-            {selectedArchiveMission.disclaimer ?? copy.archiveDisclaimer}
+            {archiveCopy.disclaimer ?? copy.archiveDisclaimer}
           </p>
           <div className="mt-3 grid grid-cols-3 gap-2">
             <button
@@ -2809,7 +2965,7 @@ function AssistantPanel({
               onClick={onFocusArchiveWaypoint}
               className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-cyan-100 transition hover:border-cyan-200"
             >
-              Focus
+              {copy.focus}
             </button>
             <button
               type="button"
@@ -2817,14 +2973,14 @@ function AssistantPanel({
               disabled={currentArchiveWaypointIndex === 0}
               className="border border-white/10 bg-white/[0.03] px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-400 transition hover:border-cyan-300/35 hover:text-cyan-100 disabled:cursor-not-allowed disabled:text-slate-700"
             >
-              Prev
+              {copy.previous}
             </button>
             <button
               type="button"
               onClick={onNextArchiveWaypoint}
               className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-cyan-100 transition hover:border-cyan-200"
             >
-              Next
+              {copy.next}
             </button>
             {archiveExpeditionMode === "idle" ? (
               <button
@@ -2832,7 +2988,7 @@ function AssistantPanel({
                 onClick={() => onStartArchiveExpedition(selectedArchiveMission.id)}
                 className="col-span-2 border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-emerald-100 transition hover:border-emerald-200"
               >
-                Start Expedition
+                {copy.startExpedition}
               </button>
             ) : null}
             {archiveExpeditionMode === "active" &&
@@ -2843,7 +2999,7 @@ function AssistantPanel({
                 onClick={onCompleteArchiveExpedition}
                 className="col-span-2 border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-emerald-100 transition hover:border-emerald-200"
               >
-                Complete
+                {copy.complete}
               </button>
             ) : null}
             <button
@@ -2851,28 +3007,30 @@ function AssistantPanel({
               onClick={onClearArchiveRoute}
               className="border border-white/10 bg-white/[0.03] px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-400 transition hover:border-red-300/35 hover:text-red-100"
             >
-              Clear
+              {copy.clear}
             </button>
           </div>
         </div>
-      ) : currentTourStop ? (
+      ) : currentTourStop && currentTourStopCopy ? (
         <div className="mt-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-100">
-            {tourMode === "completed" ? "TOUR COMPLETE" : "TOUR ACTIVE"}
+            {tourMode === "completed"
+              ? copy.tourCompleteLabel
+              : copy.tourActiveLabel}
           </p>
           <h3 className="mt-2 text-sm font-semibold text-slate-100">
-            {currentTourStop.title}
+            {currentTourStopCopy.title}
           </h3>
           <p className="mt-2 text-sm leading-6 text-slate-300">
             {tourMode === "completed"
               ? copy.tourComplete
               : tourStopCompleted
                 ? `${copy.stopComplete}。${
-                    nextTourStop
-                      ? `${copy.nextStop}: ${nextTourStop.title}`
+                    nextTourStopCopy
+                      ? `${copy.nextStop}: ${nextTourStopCopy.title}`
                       : copy.tourComplete
                   }`
-                : `${currentTourStop.objective} ${copy.tourInstruction}`}
+                : `${currentTourStopCopy.objective} ${copy.tourInstruction}`}
           </p>
           {tourMode !== "completed" ? (
             <div className="mt-3 grid grid-cols-3 gap-2">
@@ -2881,21 +3039,21 @@ function AssistantPanel({
                 onClick={onFocusTourStop}
                 className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-cyan-100 transition hover:border-cyan-200"
               >
-                Focus
+                {copy.focus}
               </button>
               <button
                 type="button"
                 onClick={onCompleteTourStop}
                 className="border border-emerald-300/30 bg-emerald-950/18 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-emerald-100 transition hover:border-emerald-200"
               >
-                Complete
+                {copy.complete}
               </button>
               <button
                 type="button"
                 onClick={onNextTourStop}
                 className="border border-cyan-300/30 bg-cyan-950/20 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-cyan-100 transition hover:border-cyan-200"
               >
-                Next
+                {copy.next}
               </button>
             </div>
           ) : null}
@@ -2931,21 +3089,26 @@ function getAssistantMessage({
   if (cameraMode === "free") return copy.freeInstruction;
 
   if (mission) {
-    const steps = getMissionSteps(mission);
+    const missionCopy = getMissionCopy(mission, language);
+    const steps = getMissionSteps(mission, language);
     const currentStep = steps[Math.min(missionStepIndex, steps.length - 1)];
 
     if (completed) {
-      return `${copy.missionComplete}：${mission.title}。${copy.nextMission} 已在 Mission Board 中准备好。`;
+      return language === "zh"
+        ? `${copy.missionComplete}：${missionCopy.title}。${copy.nextMission} 已在${copy.missionBoard}中准备好。`
+        : `${copy.missionComplete}: ${missionCopy.title}. ${copy.nextMission} is ready in ${copy.missionBoard}.`;
     }
 
     const celestialPrefix =
       mission.category === "celestial" &&
       !currentStep.instruction.includes("天球参考层") &&
       !currentStep.instruction.includes("Celestial")
-        ? "本任务使用天球参考层。请注意：星座是观测方向上的图案，不是可以像行星一样飞抵的地点。"
+        ? language === "zh"
+          ? "本任务使用天球参考层。请注意：星座是观测方向上的图案，不是可以像行星一样飞抵的地点。"
+          : "This mission uses the celestial reference layer. Constellations are observed direction patterns, not destinations like planets. "
         : "";
 
-    return `Step ${Math.min(missionStepIndex + 1, steps.length)}/3：${celestialPrefix}${currentStep.instruction}`;
+    return `${copy.step} ${Math.min(missionStepIndex + 1, steps.length)}/3: ${celestialPrefix}${currentStep.instruction}`;
   }
 
   if (explorationPoint) {
@@ -2974,6 +3137,8 @@ function JourneyProgressBar({
 }) {
   const currentStop = activeTour.stops[activeTourStopIndex];
   const currentTarget = SPACE_OBJECTS[currentStop.target].name[language];
+  const activeTourCopy = getTourCopy(activeTour, language);
+  const currentStopCopy = getTourStopCopy(currentStop, language);
 
   return (
     <section className="pointer-events-auto absolute left-1/2 top-16 w-[min(62vw,720px)] -translate-x-1/2 border border-white/10 bg-black/52 px-4 py-3 backdrop-blur-xl">
@@ -2983,12 +3148,12 @@ function JourneyProgressBar({
             {copy.journeyProgress}
           </p>
           <p className="mt-1 text-xs text-slate-300">
-            {activeTour.title} · Stop {activeTourStopIndex + 1}/
+            {activeTourCopy.title} · {copy.stopLabel} {activeTourStopIndex + 1}/
             {activeTour.stops.length} · {currentTarget}
           </p>
         </div>
         <span className="hidden text-[10px] uppercase tracking-[0.18em] text-slate-500 sm:block">
-          {currentStop.title}
+          {currentStopCopy.title}
         </span>
       </div>
       <div className="flex items-center gap-1">
@@ -3007,7 +3172,7 @@ function JourneyProgressBar({
                     ? "bg-emerald-300/75"
                     : "bg-white/[0.05]",
               ].join(" ")}
-              title={stop.title}
+              title={getTourStopCopy(stop, language).title}
             />
           );
         })}
@@ -3027,10 +3192,11 @@ function MinimalJourneyStatus({
 }) {
   const currentStop = activeTour.stops[activeTourStopIndex];
   const targetLabel = SPACE_OBJECTS[currentStop.target].name[language];
+  const activeTourCopy = getTourCopy(activeTour, language);
 
   return (
     <div className="pointer-events-auto absolute left-1/2 top-16 -translate-x-1/2 border border-cyan-300/25 bg-black/55 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100 backdrop-blur-xl">
-      {activeTour.title} {activeTourStopIndex + 1}/{activeTour.stops.length} ·{" "}
+      {activeTourCopy.title} {activeTourStopIndex + 1}/{activeTour.stops.length} ·{" "}
       {targetLabel}
     </div>
   );
@@ -3054,7 +3220,7 @@ function MissionTargets({
   setSelectedTarget: (target: SelectedTarget) => void;
 }) {
   const labels = TARGET_LABELS_LOCALIZED[language];
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const minimalTargets: SelectedTarget[] = [
     "earth",
     "mars",
@@ -3108,7 +3274,7 @@ function MissionTargets({
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">
-            {cameraMode === "free" ? copy.manualNav : simMode}
+            {cameraMode === "free" ? copy.manualNav : formatSimMode(simMode, language)}
           </span>
           <button
             type="button"
@@ -3193,12 +3359,14 @@ function BottomTimeline({
         <span className="font-semibold uppercase tracking-[0.18em] text-emerald-200">
           {simMode === "PAUSED" ? copy.paused : copy.live}
         </span>
-        <span className="hidden text-slate-500 sm:inline">JUN 15, 2026</span>
+        <span className="hidden text-slate-500 sm:inline">
+          {language === "zh" ? "2026年6月15日" : "JUN 15, 2026"}
+        </span>
       </div>
 
       <div className="flex items-center gap-4 text-slate-300">
         <span className="hidden uppercase tracking-[0.16em] sm:inline">
-          {cameraMode === "free" ? copy.freeExplore : simMode}
+          {cameraMode === "free" ? copy.freeExplore : formatSimMode(simMode, language)}
         </span>
         <span className="hidden uppercase tracking-[0.16em] text-cyan-100/70 lg:inline">
           {viewModeLabel}
@@ -3209,7 +3377,9 @@ function BottomTimeline({
           className="h-8 w-8 rounded-full border border-cyan-300/35 bg-cyan-950/25 shadow-[0_0_18px_rgba(34,211,238,0.18)] transition hover:border-cyan-200 active:scale-[0.96]"
           title={copy.simMode}
         />
-        <span className="font-mono text-slate-200">02:33:02 PM</span>
+        <span className="font-mono text-slate-200">
+          {language === "zh" ? "14:33:02" : "02:33:02 PM"}
+        </span>
       </div>
 
       <div className="hidden items-center gap-3 text-[10px] uppercase tracking-[0.16em] text-slate-500 md:flex">
@@ -3253,12 +3423,15 @@ function MinimalStatus({
         {simMode === "PAUSED" ? copy.paused : copy.live}
       </div>
       <span className="uppercase tracking-[0.16em] text-slate-300">
-        {targetLabel} / {cameraMode === "free" ? copy.freeExplore : simMode}
+        {targetLabel} /{" "}
+        {cameraMode === "free" ? copy.freeExplore : formatSimMode(simMode, language)}
       </span>
       <span className="hidden uppercase tracking-[0.16em] text-cyan-100/70 sm:inline">
         {viewModeLabel}
       </span>
-      <span className="font-mono text-slate-400">02:33:02 PM</span>
+      <span className="font-mono text-slate-400">
+        {language === "zh" ? "14:33:02" : "02:33:02 PM"}
+      </span>
     </footer>
   );
 }
@@ -3303,9 +3476,9 @@ function DetailDrawer({
           {copy.stats}
         </p>
         {[
-          ["Diameter", info.stats.diameter],
-          ["Distance", info.stats.distanceFromSun],
-          ["Orbital Period", info.stats.orbitalPeriod],
+          [copy.diameter, info.stats.diameter],
+          [copy.distance, info.stats.distanceFromSun],
+          [copy.orbitalPeriod, info.stats.orbitalPeriod],
         ].map(([label, value]) => (
           <div
             key={label}
@@ -3320,7 +3493,7 @@ function DetailDrawer({
       </div>
       <div className="mt-3 border border-white/10 bg-white/[0.03] p-3">
         <p className="mb-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
-          Notable Features
+          {copy.notableFeatures}
         </p>
         <div className="flex flex-wrap gap-2">
           {info.stats.notableFeatures.map((feature) => (
@@ -3388,8 +3561,79 @@ function commandToToast(command: CameraCommandType, language: Language) {
   return language === "zh" ? zh[command] : en[command];
 }
 
-function formatLogEvent(type: ExplorationLogEntry["type"]) {
-  const labels: Record<ExplorationLogEntry["type"], string> = {
+function formatSimMode(mode: SimMode, language: Language) {
+  const labels: Record<Language, Record<SimMode, string>> = {
+    en: {
+      "CRUISE MODE": "CRUISE MODE",
+      "PAUSED": "PAUSED",
+      "REAL RATE": "REAL RATE",
+    },
+    zh: {
+      "CRUISE MODE": "巡航模式",
+      "PAUSED": "已暂停",
+      "REAL RATE": "实时速率",
+    },
+  };
+
+  return labels[language][mode];
+}
+
+function formatTourMode(mode: TourMode, language: Language) {
+  const labels: Record<Language, Record<TourMode, string>> = {
+    en: {
+      active: "active",
+      completed: "completed",
+      idle: "idle",
+    },
+    zh: {
+      active: "进行中",
+      completed: "已完成",
+      idle: "未启动",
+    },
+  };
+
+  return labels[language][mode];
+}
+
+function formatArchiveExpeditionMode(
+  mode: ArchiveExpeditionMode,
+  language: Language,
+) {
+  const labels: Record<Language, Record<ArchiveExpeditionMode, string>> = {
+    en: {
+      active: "active",
+      completed: "completed",
+      idle: "idle",
+    },
+    zh: {
+      active: "进行中",
+      completed: "已完成",
+      idle: "未启动",
+    },
+  };
+
+  return labels[language][mode];
+}
+
+function formatHudMode(mode: HudMode, language: Language) {
+  const labels: Record<Language, Record<HudMode, string>> = {
+    en: {
+      full: "FULL",
+      hidden: "HIDDEN",
+      minimal: "MINIMAL",
+    },
+    zh: {
+      full: "完整",
+      hidden: "隐藏",
+      minimal: "精简",
+    },
+  };
+
+  return labels[language][mode];
+}
+
+function formatLogEvent(type: ExplorationLogEntry["type"], language: Language) {
+  const en: Record<ExplorationLogEntry["type"], string> = {
     archive_expedition_completed: "EXPEDITION COMPLETE",
     archive_expedition_started: "EXPEDITION STARTED",
     archive_route_cleared: "ROUTE CLEARED",
@@ -3404,6 +3648,21 @@ function formatLogEvent(type: ExplorationLogEntry["type"]) {
     tour_stop_completed: "STOP COMPLETE",
     tour_stop_focused: "STOP FOCUSED",
   };
+  const zh: Record<ExplorationLogEntry["type"], string> = {
+    archive_expedition_completed: "远征完成",
+    archive_expedition_started: "远征启动",
+    archive_route_cleared: "路线清除",
+    archive_route_loaded: "路线载入",
+    archive_waypoint_locked: "航点锁定",
+    mission_completed: "任务完成",
+    mission_started: "任务启动",
+    mission_step: "任务步骤",
+    target_locked: "目标锁定",
+    tour_completed: "路线完成",
+    tour_started: "路线启动",
+    tour_stop_completed: "站点完成",
+    tour_stop_focused: "站点聚焦",
+  };
 
-  return labels[type];
+  return language === "zh" ? zh[type] : en[type];
 }

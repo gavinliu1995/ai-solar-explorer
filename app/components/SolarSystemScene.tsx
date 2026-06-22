@@ -280,6 +280,7 @@ export default function SolarSystemScene({
       {viewLayers.missionRoutes ? (
         <MissionRouteLayer
           currentWaypointIndex={currentArchiveWaypointIndex}
+          language={language}
           mission={selectedArchiveMission}
           onSelectWaypoint={onSelectArchiveWaypoint}
           showLabels={viewLayers.labels}
@@ -947,7 +948,11 @@ function getNearestTarget(position: Vector3) {
 
   LOCKABLE_TARGETS.forEach((target) => {
     const [x, y, z] = TARGET_POSITIONS[target];
-    const distance = position.distanceTo(new Vector3(x, y, z));
+    const deltaX = position.x - x;
+    const deltaY = position.y - y;
+    const deltaZ = position.z - z;
+    const distance =
+      deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
 
     if (distance < nearestDistance) {
       nearestDistance = distance;

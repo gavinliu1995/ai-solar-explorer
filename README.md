@@ -5,7 +5,7 @@ Argonaut is an independent educational prototype for mission-guided solar system
 ## Features
 
 - Mission Control deep-space console
-- Mission Experience Loop with guided steps, completion feedback, and Exploration Log
+- Mission Experience Loop with guided steps, completion feedback, and Captain's Log
 - Grand Tour route-based exploration
 - Tour Catalog with Grand Tour, Inner Worlds, Giant Planets, and Outer Frontier routes
 - Journey Progress and Captain's Log

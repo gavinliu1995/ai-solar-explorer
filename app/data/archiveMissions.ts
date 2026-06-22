@@ -3,11 +3,15 @@ import type {
   ArchiveMissionCategory,
   ArchiveMissionId,
   DiscoveryCard,
+  Language,
+  MissionWaypoint,
   SpaceTarget,
 } from "@/app/types/space";
 
 const ROUTE_DISCLAIMER =
   "Mission routes are simplified educational visualizations, not precise flight dynamics.";
+const ROUTE_DISCLAIMER_ZH =
+  "任务路线是简化教育可视化，不代表精确飞行动力学或真实轨道。";
 
 export const ARCHIVE_CATEGORY_LABELS: Record<
   ArchiveMissionCategory | "all",
@@ -304,6 +308,172 @@ export const DISCOVERY_CARDS: DiscoveryCard[] = [
   discovery("europa-clipper-ocean", "europa-clipper", "Ocean World Questions", "Europa is framed as an icy moon with habitability questions.", "jupiter"),
 ];
 
+type ArchiveMissionCopy = Pick<
+  ArchiveMission,
+  | "agencyLabel"
+  | "disclaimer"
+  | "keyDiscoveries"
+  | "longDescription"
+  | "shortDescription"
+  | "statusLabel"
+  | "subtitle"
+>;
+type WaypointCopy = Pick<MissionWaypoint, "description" | "label">;
+type DiscoveryCopy = Pick<DiscoveryCard, "body" | "title">;
+
+const ARCHIVE_MISSION_ZH: Record<ArchiveMissionId, ArchiveMissionCopy> = {
+  "voyager-1": {
+    agencyLabel: "NASA / JPL 档案",
+    keyDiscoveries: ["巨行星飞掠视角", "外太阳系尺度", "星际轨迹语境"],
+    longDescription:
+      "在寰宇星舟中，Voyager 1 被表现为从地球出发、穿过巨行星区域并指向外侧边疆的简化教育路线。该档案强调尺度、飞掠顺序，以及探测器如何通过行星遭遇建立深空探索记录。",
+    shortDescription: "穿过木星、土星并指向深空边疆的历史外太阳系路线档案。",
+    statusLabel: "历史任务档案",
+    subtitle: "外侧边疆航迹档案",
+  },
+  "voyager-2": {
+    agencyLabel: "NASA / JPL 档案",
+    keyDiscoveries: ["本应用中唯一连接四大巨行星的探测器路线", "冰巨星飞掠语境", "外行星对比"],
+    longDescription:
+      "Voyager 2 在这里被建模为完整的巨行星档案路线。这条简化路径连接木星、土星、天王星和海王星，帮助比较气态巨行星、冰巨星、环系统和卫星系统。",
+    shortDescription: "连接四颗外侧巨行星的巨行星远征档案。",
+    statusLabel: "历史任务档案",
+    subtitle: "四大巨行星路线",
+  },
+  cassini: {
+    agencyLabel: "NASA / ESA / ASI 档案",
+    keyDiscoveries: ["土星环系统", "泰坦大气语境", "土卫二冰质卫星语境"],
+    longDescription:
+      "Cassini 被呈现为土星系统档案。路线使用地球、木星和土星航点来构建漫长巡航背景，并聚焦土星环、泰坦和冰质卫星的科学主题。",
+    shortDescription: "聚焦土星环和冰质卫星的土星系统远征档案。",
+    statusLabel: "历史任务档案",
+    subtitle: "土星系统档案",
+  },
+  juno: {
+    agencyLabel: "NASA / JPL 档案",
+    keyDiscoveries: ["木星云带", "磁场环境", "巨行星内部结构问题"],
+    longDescription:
+      "Juno 被建模为聚焦木星的任务档案。路线从地球移动到木星，并强调云层、磁场环境和木星内部结构问题。",
+    shortDescription: "用于观察木星云层和磁层语境的木星任务路线。",
+    statusLabel: "任务档案",
+    subtitle: "木星极区科学档案",
+  },
+  "new-horizons": {
+    agencyLabel: "NASA / JHUAPL / SwRI 档案",
+    keyDiscoveries: ["冥王星作为复杂矮行星", "柯伊伯带边疆", "外太阳系尺度"],
+    longDescription:
+      "New Horizons 被表现为快速外太阳系档案路线，从地球经木星抵达冥王星和柯伊伯带边疆。这条简化路线强调冥王星是复杂矮行星，而不是传统主要行星。",
+    shortDescription: "面向冥王星和柯伊伯带边疆的外太阳系路线档案。",
+    statusLabel: "历史任务档案",
+    subtitle: "冥王星与柯伊伯带档案",
+  },
+  "parker-solar-probe": {
+    agencyLabel: "NASA 档案",
+    keyDiscoveries: ["太阳日冕", "太阳风", "内太阳系引力辅助"],
+    longDescription:
+      "Parker Solar Probe 被表现为以内太阳系为主的任务档案，使用地球、金星和太阳构成路线。该档案强调太阳日冕，以及近太阳任务如何利用内侧行星几何关系。",
+    shortDescription: "穿过内太阳系并聚焦太阳日冕的任务档案。",
+    statusLabel: "任务档案",
+    subtitle: "太阳日冕档案",
+  },
+  perseverance: {
+    agencyLabel: "NASA / JPL 档案",
+    keyDiscoveries: ["杰泽罗陨石坑", "古湖泊三角洲语境", "火星样本缓存语境"],
+    longDescription:
+      "Perseverance 被表现为聚焦杰泽罗陨石坑和古环境语境的火星表面探索档案。这是一条简化的地球到火星路线，不代表真实着陆轨迹。",
+    shortDescription: "围绕杰泽罗陨石坑和古水环境线索的火星探索档案。",
+    statusLabel: "任务档案",
+    subtitle: "火星杰泽罗档案",
+  },
+  "tianwen-1": {
+    agencyLabel: "CNSA 档案",
+    keyDiscoveries: ["火星环绕器 / 着陆器 / 巡视器组合", "火星表面探索语境", "独立火星任务视角"],
+    longDescription:
+      "天问一号被表现为结合火星轨道和表面探索语境的任务档案。路线保持聚焦火星这一多层次探索目标。",
+    shortDescription: "连接火星轨道与表面探索语境的火星任务档案。",
+    statusLabel: "任务档案",
+    subtitle: "火星环绕 / 着陆 / 巡视档案",
+  },
+  galileo: {
+    agencyLabel: "NASA / JPL 档案",
+    keyDiscoveries: ["木星系统", "伽利略卫星", "欧罗巴 / 伊奥语境"],
+    longDescription:
+      "Galileo 被表现为带有内太阳系飞掠语境的木星系统档案。路线强调木星和伽利略卫星组成的一组紧凑世界。",
+    shortDescription: "面向伽利略卫星和巨行星科学的木星系统档案。",
+    statusLabel: "历史任务档案",
+    subtitle: "木星系统档案",
+  },
+  dawn: {
+    agencyLabel: "NASA / JPL 档案",
+    keyDiscoveries: ["原行星 / 矮行星语境", "小行星带多样性", "谷神星亮斑沉积物语境"],
+    longDescription:
+      "Dawn 被建模为小行星带档案路线，从地球进入岩石碎片带并抵达谷神星。该路线强调小行星带内部的多样性，而不是单一行星式目的地。",
+    shortDescription: "面向小天体科学的小行星带与谷神星档案。",
+    statusLabel: "历史任务档案",
+    subtitle: "小行星带档案",
+  },
+  "europa-clipper": {
+    agencyLabel: "NASA 档案",
+    keyDiscoveries: ["欧罗巴海洋世界语境", "宜居性问题", "冰质卫星侦察"],
+    longDescription:
+      "Europa Clipper 被表现为面向未来的任务档案，聚焦木星系统和欧罗巴语境。本应用使用简化路线来组织冰质卫星侦察和宜居性问题。",
+    shortDescription: "聚焦欧罗巴语境的木星冰质卫星侦察档案。",
+    statusLabel: "任务概念档案",
+    subtitle: "欧罗巴海洋世界档案",
+  },
+};
+
+const WAYPOINT_ZH: Record<string, WaypointCopy> = {
+  "voyager-1-earth": { label: "地球出发", description: "发射语境和离开内太阳系的起点。" },
+  "voyager-1-jupiter": { label: "木星飞掠", description: "巨行星飞掠视角和卫星系统语境。" },
+  "voyager-1-saturn": { label: "土星飞掠", description: "环系行星遭遇和外行星过渡。" },
+  "voyager-1-kuiper": { label: "外侧边疆", description: "使用柯伊伯带图层作为离开行星区域的尺度参考。" },
+  "voyager-2-earth": { label: "地球出发", description: "发射参考和路线起点。" },
+  "voyager-2-jupiter": { label: "木星遭遇", description: "第一处巨行星对比航点。" },
+  "voyager-2-saturn": { label: "土星遭遇", description: "环系统和冰质卫星语境。" },
+  "voyager-2-uranus": { label: "天王星飞掠", description: "倾斜冰巨星和微弱环系统语境。" },
+  "voyager-2-neptune": { label: "海王星飞掠", description: "深蓝冰巨星和海卫一语境。" },
+  "cassini-earth": { label: "地球出发", description: "离开内太阳系的起点语境。" },
+  "cassini-jupiter": { label: "木星辅助语境", description: "使用木星作为巡航尺度参考。" },
+  "cassini-saturn": { label: "土星系统", description: "土星环、泰坦和土卫二成为主要档案焦点。" },
+  "juno-earth": { label: "地球出发", description: "出发与巡航参考。" },
+  "juno-jupiter": { label: "木星轨道语境", description: "云带、尺度和卫星系统环境。" },
+  "new-horizons-earth": { label: "地球出发", description: "发射参考和快速外飞轨迹语境。" },
+  "new-horizons-jupiter": { label: "木星飞掠", description: "进入遥远外太阳系前的尺度建立航点。" },
+  "new-horizons-pluto": { label: "冥王星遭遇", description: "复杂矮行星和卡戎语境。" },
+  "new-horizons-kuiper": { label: "柯伊伯带边疆", description: "外侧冰体区域和边疆视角。" },
+  "parker-earth": { label: "地球出发", description: "内太阳系路线起点。" },
+  "parker-venus": { label: "金星几何关系", description: "金星作为接近太阳过程中的内太阳系参考。" },
+  "parker-sun": { label: "太阳日冕", description: "聚焦太阳并检查日冕视觉层。" },
+  "perseverance-earth": { label: "地球出发", description: "火星转移路线起点参考。" },
+  "perseverance-mars": { label: "杰泽罗语境", description: "火星地貌和杰泽罗陨石坑探索语境。" },
+  "tianwen-earth": { label: "地球出发", description: "火星路线起点参考。" },
+  "tianwen-mars": { label: "火星系统", description: "火星轨道和表面探索语境。" },
+  "galileo-earth-1": { label: "地球出发", description: "发射和内太阳系路线起点。" },
+  "galileo-venus": { label: "金星飞掠语境", description: "内太阳系几何关系参考。" },
+  "galileo-earth-2": { label: "地球返回语境", description: "引力辅助路线语境，已为教育展示简化。" },
+  "galileo-jupiter": { label: "木星系统", description: "伽利略卫星和巨行星环境。" },
+  "dawn-earth": { label: "地球出发", description: "小天体路线起点。" },
+  "dawn-belt": { label: "小行星带", description: "岩石碎片场和小天体语境。" },
+  "dawn-ceres": { label: "谷神星", description: "小行星带最大天体和矮行星锚点。" },
+  "europa-clipper-earth": { label: "地球出发", description: "木星系统远征路线起点。" },
+  "europa-clipper-jupiter": { label: "木星系统", description: "伽利略卫星系统中的欧罗巴语境。" },
+};
+
+const DISCOVERY_ZH: Record<string, DiscoveryCopy> = {
+  "voyager-1-scale": { title: "外太阳系尺度", body: "飞掠路线把巨行星变成深空尺度标尺。" },
+  "voyager-2-ice": { title: "冰巨星对比", body: "天王星和海王星在同一档案路线中成为可对比世界。" },
+  "cassini-rings": { title: "环系统档案", body: "土星环被视为结构化系统，而不是装饰性光环。" },
+  "juno-clouds": { title: "云带问题", body: "木星可见云带是进入更深内部结构问题的入口。" },
+  "new-horizons-pluto": { title: "复杂冥王星", body: "冥王星被呈现为嵌入外侧边疆的细节丰富矮行星。" },
+  "parker-corona": { title: "日冕语境", body: "太阳日冕成为该任务的主要环境。" },
+  "perseverance-jezero": { title: "杰泽罗语境", body: "一个陨石坑成为古水环境和探索规划的记录。" },
+  "tianwen-mars": { title: "火星系统档案", body: "火星探索可以结合轨道和表面两种视角。" },
+  "galileo-moons": { title: "伽利略世界", body: "木星系统像围绕一颗巨行星排列的一组紧凑世界。" },
+  "dawn-ceres": { title: "小行星带多样性", body: "谷神星让小行星带呈现出矮行星级复杂度。" },
+  "europa-clipper-ocean": { title: "海洋世界问题", body: "欧罗巴被视为带有宜居性问题的冰质卫星。" },
+};
+
 export const ARCHIVE_SEARCH_ALIASES: Record<ArchiveMissionId, string[]> = {
   cassini: ["cassini", "卡西尼"],
   dawn: ["dawn", "黎明号", "黎明"],
@@ -333,6 +503,44 @@ export function getArchiveMissionsForTarget(target: SpaceTarget) {
     mission.primaryTargets.includes(target) ||
     mission.waypoints.some((waypoint) => waypoint.target === target),
   );
+}
+
+export function getArchiveMissionCopy(
+  mission: ArchiveMission,
+  language: Language,
+): ArchiveMissionCopy {
+  if (language === "zh") {
+    return {
+      ...ARCHIVE_MISSION_ZH[mission.id],
+      disclaimer: ROUTE_DISCLAIMER_ZH,
+    };
+  }
+
+  return {
+    agencyLabel: mission.agencyLabel,
+    disclaimer: mission.disclaimer ?? ROUTE_DISCLAIMER,
+    keyDiscoveries: mission.keyDiscoveries,
+    longDescription: mission.longDescription,
+    shortDescription: mission.shortDescription,
+    statusLabel: mission.statusLabel,
+    subtitle: mission.subtitle,
+  };
+}
+
+export function getMissionWaypointCopy(
+  waypoint: MissionWaypoint,
+  language: Language,
+): WaypointCopy {
+  if (language === "zh") return WAYPOINT_ZH[waypoint.id] ?? waypoint;
+  return waypoint;
+}
+
+export function getDiscoveryCardCopy(
+  card: DiscoveryCard,
+  language: Language,
+): DiscoveryCopy {
+  if (language === "zh") return DISCOVERY_ZH[card.id] ?? card;
+  return card;
 }
 
 function waypoint(

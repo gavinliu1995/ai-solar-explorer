@@ -14,11 +14,14 @@ import type { ThreeEvent } from "@react-three/fiber";
 import type {
   ArchiveMission,
   ArchiveMissionCategory,
+  Language,
   SpaceTarget,
 } from "@/app/types/space";
+import { getMissionWaypointCopy } from "@/app/data/archiveMissions";
 
 type MissionRouteLayerProps = {
   currentWaypointIndex: number;
+  language: Language;
   mission: ArchiveMission | null;
   onSelectWaypoint?: (index: number) => void;
   showLabels: boolean;
@@ -36,6 +39,7 @@ const CATEGORY_COLORS: Record<ArchiveMissionCategory, string> = {
 
 export default function MissionRouteLayer({
   currentWaypointIndex,
+  language,
   mission,
   onSelectWaypoint,
   showLabels,
@@ -89,6 +93,7 @@ export default function MissionRouteLayer({
         const position = targetPositions[waypoint.target];
         const active = index === currentWaypointIndex;
         const markerScale = active ? 1.55 : 1;
+        const waypointCopy = getMissionWaypointCopy(waypoint, language);
 
         return (
           <group
@@ -136,7 +141,7 @@ export default function MissionRouteLayer({
                   }}
                   type="button"
                 >
-                  {waypoint.label}
+                  {waypointCopy.label}
                 </button>
               </Html>
             ) : null}

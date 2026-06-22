@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import Hud from "./components/Hud";
 import {
+  getMissionCopy,
   getMissionById,
   getMissionSteps,
   getRecommendedMission,
@@ -11,9 +12,11 @@ import {
 } from "./data/missions";
 import {
   getArchiveMissionById,
+  getArchiveMissionCopy,
+  getMissionWaypointCopy,
 } from "./data/archiveMissions";
 import { SPACE_OBJECTS } from "./data/spaceObjects";
-import { getTourById } from "./data/tours";
+import { getTourById, getTourCopy, getTourStopCopy } from "./data/tours";
 import type {
   ActivePanel,
   ArchiveExpeditionMode,
@@ -30,6 +33,7 @@ import type {
   LockBehavior,
   Mission,
   MissionWaypoint,
+  MarsExplorationPoint,
   SelectedTarget,
   SimMode,
   TourId,
@@ -38,6 +42,7 @@ import type {
   ViewLayerState,
   ViewMode,
 } from "./types/space";
+import { EXPLORATION_LABELS_LOCALIZED } from "./types/space";
 
 const SolarSystemScene = dynamic(
   () => import("./components/SolarSystemScene"),
@@ -144,11 +149,14 @@ export default function Home() {
     message: string,
     type: ExplorationLogEntry["type"],
   ) {
-    const timestamp = new Date().toLocaleTimeString("zh-CN", {
+    const timestamp = new Date().toLocaleTimeString(
+      language === "zh" ? "zh-CN" : "en-US",
+      {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
-    });
+      },
+    );
 
     setExplorationLog((currentLog) => [
       {
@@ -203,12 +211,16 @@ export default function Home() {
     lastLoggedTargetRef.current = target;
     addCaptainLog(
       refId,
-      `TARGET LOCKED — ${SPACE_OBJECTS[target].name.en}.`,
+      language === "zh"
+        ? `目标锁定 — ${SPACE_OBJECTS[target].name.zh}。`
+        : `TARGET LOCKED — ${SPACE_OBJECTS[target].name.en}.`,
       "target_locked",
     );
   }
 
   function applyTourStop(stop: TourStop) {
+    const stopCopy = getTourStopCopy(stop, language);
+
     setSelectedTarget(stop.target);
     setExplorationPoint(null);
     setSelectedMissionId(null);
@@ -226,7 +238,9 @@ export default function Home() {
     recordTargetLocked(stop.target, stop.id);
     addCaptainLog(
       stop.id,
-      `STOP FOCUSED — ${stop.title}.`,
+      language === "zh"
+        ? `站点聚焦 — ${stopCopy.title}。`
+        : `STOP FOCUSED — ${stopCopy.title}.`,
       "tour_stop_focused",
     );
   }
@@ -262,9 +276,13 @@ export default function Home() {
     recordTargetLocked(waypoint.target, waypoint.id);
 
     if (options.log !== false) {
+      const waypointCopy = getMissionWaypointCopy(waypoint, language);
+
       addCaptainLog(
         waypoint.id,
-        `WAYPOINT LOCKED — ${waypoint.label}.`,
+        language === "zh"
+          ? `航点锁定 — ${waypointCopy.label}。`
+          : `WAYPOINT LOCKED — ${waypointCopy.label}.`,
         "archive_waypoint_locked",
       );
     }
@@ -273,6 +291,7 @@ export default function Home() {
   function handleViewArchiveRoute(missionId: ArchiveMissionId) {
     const mission = getArchiveMissionById(missionId);
     if (!mission) return;
+    const missionCopy = getArchiveMissionCopy(mission, language);
 
     setSelectedArchiveMissionId(mission.id);
     setArchiveExpeditionMode("idle");
@@ -287,11 +306,17 @@ export default function Home() {
     }));
     addCaptainLog(
       mission.id,
-      `ROUTE LOADED — ${mission.name} trajectory profile.`,
+      language === "zh"
+        ? `路线载入 — ${mission.name}：${missionCopy.subtitle}。`
+        : `ROUTE LOADED — ${mission.name} trajectory profile.`,
       "archive_route_loaded",
     );
     applyArchiveWaypoint(mission, 0, { log: false });
-    showToast(`${mission.name} route loaded`);
+    showToast(
+      language === "zh"
+        ? `${mission.name} 路线已载入`
+        : `${mission.name} route loaded`,
+    );
   }
 
   function handleSelectArchiveWaypoint(index: number) {
@@ -335,7 +360,11 @@ export default function Home() {
     if (!mission) return;
 
     if (activeTourId) {
-      showToast("Archive expedition started. Grand Tour progress is preserved.");
+      showToast(
+        language === "zh"
+          ? "档案远征已启动，当前路线进度会保留"
+          : "Archive expedition started. Grand Tour progress is preserved.",
+      );
     }
 
     setSelectedArchiveMissionId(mission.id);
@@ -346,7 +375,9 @@ export default function Home() {
     dismissWelcome();
     addCaptainLog(
       mission.id,
-      `EXPEDITION STARTED — ${mission.name}.`,
+      language === "zh"
+        ? `远征启动 — ${mission.name}。`
+        : `EXPEDITION STARTED — ${mission.name}.`,
       "archive_expedition_started",
     );
     applyArchiveWaypoint(mission, 0, { log: false });
@@ -358,17 +389,25 @@ export default function Home() {
     setArchiveExpeditionMode("completed");
     addCaptainLog(
       selectedArchiveMission.id,
-      `EXPEDITION COMPLETE — ${selectedArchiveMission.name} profile completed.`,
+      language === "zh"
+        ? `远征完成 — ${selectedArchiveMission.name} 档案路线已完成。`
+        : `EXPEDITION COMPLETE — ${selectedArchiveMission.name} profile completed.`,
       "archive_expedition_completed",
     );
-    showToast(`${selectedArchiveMission.name} expedition complete`);
+    showToast(
+      language === "zh"
+        ? `${selectedArchiveMission.name} 远征完成`
+        : `${selectedArchiveMission.name} expedition complete`,
+    );
   }
 
   function handleClearArchiveRoute() {
     if (selectedArchiveMission) {
       addCaptainLog(
         selectedArchiveMission.id,
-        `ROUTE CLEARED — ${selectedArchiveMission.name}.`,
+        language === "zh"
+          ? `路线清除 — ${selectedArchiveMission.name}。`
+          : `ROUTE CLEARED — ${selectedArchiveMission.name}.`,
         "archive_route_cleared",
       );
     }
@@ -376,14 +415,14 @@ export default function Home() {
     setCurrentArchiveWaypointIndex(0);
     setArchiveExpeditionMode("idle");
     setArchivePanelOpen(false);
-    showToast("Archive route cleared");
+    showToast(language === "zh" ? "档案路线已清除" : "Archive route cleared");
   }
 
   function handleOpenArchivesPanel() {
     setHudMode("full");
     setActivePanel("archives");
     setArchivePanelOpen(true);
-    showToast("Mission Archives opened");
+    showToast(language === "zh" ? "任务档案馆已打开" : "Mission Archives opened");
   }
 
   function handleSelectTarget(target: SelectedTarget) {
@@ -435,6 +474,7 @@ export default function Home() {
 
   function handleStartMission(mission: Mission) {
     const focusTarget = mission.focusTarget ?? mission.target;
+    const missionCopy = getMissionCopy(mission, language);
 
     setSelectedMissionId(mission.id);
     setMissionStepIndex(0);
@@ -448,7 +488,9 @@ export default function Home() {
     dismissWelcome();
     addCaptainLog(
       mission.id,
-      `MISSION STARTED — ${mission.title}.`,
+      language === "zh"
+        ? `任务启动 — ${missionCopy.title}。`
+        : `MISSION STARTED — ${missionCopy.title}.`,
       "mission_started",
     );
 
@@ -463,6 +505,7 @@ export default function Home() {
 
   function handleCompleteMission(missionId: string) {
     const mission = getMissionById(missionId);
+    const missionCopy = mission ? getMissionCopy(mission, language) : null;
     const alreadyCompleted = completedMissionIds.includes(missionId);
 
     setSelectedMissionId(missionId);
@@ -475,14 +518,24 @@ export default function Home() {
     if (mission && !alreadyCompleted) {
       addCaptainLog(
         missionId,
-        `MISSION COMPLETE — ${mission.title}.`,
+        language === "zh"
+          ? `任务完成 — ${missionCopy?.title ?? mission.title}。`
+          : `MISSION COMPLETE — ${missionCopy?.title ?? mission.title}.`,
         "mission_completed",
       );
     }
     if (currentTourStop?.recommendedMissionIds.includes(missionId)) {
-      showToast("推荐任务已完成，可以标记本站完成");
+      showToast(
+        language === "zh"
+          ? "推荐任务已完成，可以标记本站完成"
+          : "Recommended mission complete. You can mark this stop complete.",
+      );
     } else {
-      showToast("任务完成，已写入 Captain's Log");
+      showToast(
+        language === "zh"
+          ? "任务完成，已写入航行日志"
+          : "Mission complete. Written to Captain's Log.",
+      );
     }
   }
 
@@ -490,7 +543,7 @@ export default function Home() {
     const mission = getMissionById(selectedMissionId);
     if (!mission) return;
 
-    const steps = getMissionSteps(mission);
+    const steps = getMissionSteps(mission, language);
     const currentStep = steps[missionStepIndex] ?? steps[0];
 
     if (currentStep.target) {
@@ -519,7 +572,9 @@ export default function Home() {
 
     addCaptainLog(
       mission.id,
-      `MISSION STEP — ${currentStep.title}：${currentStep.instruction}`,
+      language === "zh"
+        ? `任务步骤 — ${currentStep.title}：${currentStep.instruction}`
+        : `MISSION STEP — ${currentStep.title}: ${currentStep.instruction}`,
       "mission_step",
     );
 
@@ -543,6 +598,7 @@ export default function Home() {
     const tour = getTourById(tourId);
     const firstStop = tour?.stops[0];
     if (!tour || !firstStop) return;
+    const tourCopy = getTourCopy(tour, language);
 
     setActiveTourId(tour.id);
     setActiveTourStopIndex(0);
@@ -554,11 +610,17 @@ export default function Home() {
     dismissWelcome();
     addCaptainLog(
       tour.id,
-      `TOUR STARTED — ${tour.title} initialized.`,
+      language === "zh"
+        ? `路线启动 — ${tourCopy.title} 已初始化。`
+        : `TOUR STARTED — ${tourCopy.title} initialized.`,
       "tour_started",
     );
     applyTourStop(firstStop);
-    showToast(`${tour.title} 已启动`);
+    showToast(
+      language === "zh"
+        ? `${tourCopy.title} 已启动`
+        : `${tourCopy.title} started`,
+    );
   }
 
   function handleFocusTourStop() {
@@ -568,6 +630,8 @@ export default function Home() {
 
   function handleCompleteTourStop() {
     if (!activeTour || !currentTourStop) return;
+    const activeTourCopy = getTourCopy(activeTour, language);
+    const currentStopCopy = getTourStopCopy(currentTourStop, language);
 
     const isFinalStop = activeTourStopIndex >= activeTour.stops.length - 1;
     setCompletedTourStopIds((currentIds) =>
@@ -577,7 +641,9 @@ export default function Home() {
     );
     addCaptainLog(
       currentTourStop.id,
-      `STOP COMPLETE — ${currentTourStop.title}.`,
+      language === "zh"
+        ? `站点完成 — ${currentStopCopy.title}。`
+        : `STOP COMPLETE — ${currentStopCopy.title}.`,
       "tour_stop_completed",
     );
 
@@ -585,22 +651,37 @@ export default function Home() {
       setTourMode("completed");
       addCaptainLog(
         activeTour.id,
-        `TOUR COMPLETE — ${activeTour.title}.`,
+        language === "zh"
+          ? `路线完成 — ${activeTourCopy.title}。`
+          : `TOUR COMPLETE — ${activeTourCopy.title}.`,
         "tour_completed",
       );
-      showToast(`${activeTour.title} complete`);
+      showToast(
+        language === "zh"
+          ? `${activeTourCopy.title} 已完成`
+          : `${activeTourCopy.title} complete`,
+      );
       return;
     }
 
     const nextStop = activeTour.stops[activeTourStopIndex + 1];
-    showToast(`本站已记录，建议前往下一站：${nextStop.title}`);
+    const nextStopCopy = getTourStopCopy(nextStop, language);
+    showToast(
+      language === "zh"
+        ? `本站已记录，建议前往下一站：${nextStopCopy.title}`
+        : `Stop recorded. Next recommended stop: ${nextStopCopy.title}`,
+    );
   }
 
   function handleNextTourStop() {
     if (!activeTour || !currentTourStop) return;
 
     if (!completedTourStopIds.includes(currentTourStop.id)) {
-      showToast("Current stop not completed");
+      showToast(
+        language === "zh"
+          ? "当前站点尚未完成"
+          : "Current stop not completed",
+      );
     }
 
     const nextIndex = activeTourStopIndex + 1;
@@ -620,7 +701,11 @@ export default function Home() {
     setTourMode("active");
     setTourPanelOpen(true);
     applyTourStop(activeTour.stops[stopIndex]);
-    showToast(`Jumped to stop ${stopIndex + 1}`);
+    showToast(
+      language === "zh"
+        ? `已跳转到第 ${stopIndex + 1} 站`
+        : `Jumped to stop ${stopIndex + 1}`,
+    );
   }
 
   function handleExitTour() {
@@ -628,7 +713,7 @@ export default function Home() {
     setActiveTourStopIndex(0);
     setTourMode("idle");
     setTourPanelOpen(false);
-    showToast("Tour exited");
+    showToast(language === "zh" ? "已退出路线" : "Tour exited");
   }
 
   function handleRestartTour() {
@@ -668,22 +753,40 @@ export default function Home() {
   async function handleShareView() {
     const brandName = language === "zh" ? "寰宇星舟" : "Argonaut";
     const targetName = SPACE_OBJECTS[selectedTarget].name[language];
+    const activeTourCopy = activeTour ? getTourCopy(activeTour, language) : null;
+    const archiveContext = selectedArchiveMission
+      ? language === "zh"
+        ? `任务档案：${selectedArchiveMission.name}`
+        : `Archive route: ${selectedArchiveMission.name}`
+      : null;
+    const tourContext = activeTour
+      ? language === "zh"
+        ? `路线：${activeTourCopy?.title} ${activeTourStopIndex + 1}/${activeTour.stops.length}`
+        : `Tour: ${activeTourCopy?.title} ${activeTourStopIndex + 1}/${activeTour.stops.length}`
+      : null;
+    const context = archiveContext ?? tourContext;
     const shareText =
       language === "zh"
-        ? `${brandName} - 当前目标：${targetName}`
-        : `${brandName} - Current target: ${targetName}`;
+        ? `${brandName} - 当前目标：${targetName}${context ? ` - ${context}` : ""}`
+        : `${brandName} - Current target: ${targetName}${context ? ` - ${context}` : ""}`;
 
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareText);
-        showToast("当前探索视图已复制");
+        showToast(
+          language === "zh"
+            ? "当前探索视图已复制"
+            : "Current exploration view copied",
+        );
         return;
       }
     } catch {
       // Browser clipboard permissions can fail silently in local prototypes.
     }
 
-    showToast("分享信息已准备好");
+    showToast(
+      language === "zh" ? "分享信息已准备好" : "Share information is ready",
+    );
   }
 
   function handleToggleHudMode() {
@@ -705,18 +808,51 @@ export default function Home() {
     try {
       if (document.fullscreenElement) {
         await document.exitFullscreen();
-        showToast("已退出全屏");
+        showToast(language === "zh" ? "已退出全屏" : "Exited fullscreen");
       } else {
         await document.documentElement.requestFullscreen();
-        showToast("已进入全屏");
+        showToast(language === "zh" ? "已进入全屏" : "Entered fullscreen");
       }
     } catch {
-      showToast("当前浏览器暂不支持全屏切换");
+      showToast(
+        language === "zh"
+          ? "当前浏览器暂不支持全屏切换"
+          : "Fullscreen is not available in this browser",
+      );
     }
   }
 
   function handleRelatedItem(item: string) {
     const normalizedItem = item.toLowerCase();
+    const explorationMatch = (
+      Object.entries(EXPLORATION_LABELS_LOCALIZED.zh) as Array<
+        [MarsExplorationPoint, string]
+      >
+    ).find(([, label]) => label === item) ??
+      (
+        Object.entries(EXPLORATION_LABELS_LOCALIZED.en) as Array<
+          [MarsExplorationPoint, string]
+        >
+      ).find(([, label]) => label.toLowerCase() === normalizedItem);
+
+    if (explorationMatch) {
+      setSelectedTarget("mars");
+      setExplorationPoint(explorationMatch[0]);
+      setSelectedMissionId(null);
+      setMissionStepIndex(0);
+      setCameraMode("locked");
+      setLockBehavior("fly");
+      setActivePanel("info");
+      issueCameraCommand("close");
+      recordTargetLocked("mars", explorationMatch[0]);
+      showToast(
+        language === "zh"
+          ? `已选定火星探索点：${item}`
+          : `Mars exploration site selected: ${item}`,
+      );
+      return;
+    }
+
     const lockableTargets = Object.keys(SPACE_OBJECTS) as SelectedTarget[];
     const relatedTarget = lockableTargets.find((target) =>
       normalizedItem.includes(target),
@@ -732,7 +868,11 @@ export default function Home() {
       return;
     }
 
-    showToast(`已标记相关对象：${item}`);
+    showToast(
+      language === "zh"
+        ? `已标记相关对象：${item}`
+        : `Related object marked: ${item}`,
+    );
   }
 
   return (
