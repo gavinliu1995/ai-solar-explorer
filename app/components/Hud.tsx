@@ -20,6 +20,12 @@ import {
   getMissionsForTarget,
   getRecommendedMission,
 } from "@/app/data/missions";
+import {
+  DISCOVERY_CARDS as SCAN_DISCOVERY_CARDS,
+  getScanDiscoveryCardCopy,
+} from "@/app/data/discoveryCards";
+import { MISSION_BADGES, getMissionBadgeCopy } from "@/app/data/missionBadges";
+import { getCaptainRank } from "@/app/data/playerProgress";
 import { SPACE_OBJECTS } from "@/app/data/spaceObjects";
 import { TOURS, getTourById, getTourCopy, getTourStopCopy } from "@/app/data/tours";
 import type {
@@ -40,6 +46,7 @@ import type {
   Mission,
   MissionStep,
   MissionStatus,
+  PlayerProgress,
   SelectedTarget,
   SimMode,
   Tour,
@@ -84,6 +91,7 @@ type HudProps = {
   archivePanelOpen: boolean;
   completedTourStopIds: string[];
   currentArchiveWaypointIndex: number;
+  playerProgress: PlayerProgress;
   selectedArchiveMissionId: ArchiveMissionId | null;
   tourMode: TourMode;
   tourPanelOpen: boolean;
@@ -245,6 +253,24 @@ const COPY = {
     welcomeTitle: "Welcome aboard",
     explorationLog: "Captain's Log",
     captainLog: "Captain's Log",
+    collection: "Collection",
+    collectionTitle: "Discovery Collection",
+    collectionSubtitle: "Cockpit scan rewards and research progress.",
+    flightXp: "Flight XP",
+    researchCredits: "Research Credits",
+    captainRank: "Captain Rank",
+    scannedTargets: "Scanned Targets",
+    badgesUnlocked: "Badges Unlocked",
+    discoveries: "Discoveries",
+    badges: "Mission Badges",
+    unlocked: "Unlocked",
+    lockedDiscovery: "Locked Discovery",
+    scanToUnlock: "Scan related target to unlock",
+    focusTarget: "Focus Target",
+    observationPrompt: "Observation Prompt",
+    progressHints: "Progress Hints",
+    collectionHint:
+      "Scan Neptune to unlock an epic ice giant card, or continue toward the Kuiper Belt for outer frontier records.",
     archives: "Archives",
     archiveCatalog: "Mission Archives",
     archiveDisclaimer:
@@ -404,6 +430,24 @@ const COPY = {
     welcomeTitle: "欢迎登舰",
     explorationLog: "航行日志",
     captainLog: "航行日志",
+    collection: "收藏",
+    collectionTitle: "发现收藏",
+    collectionSubtitle: "驾驶舱扫描奖励与研究进度。",
+    flightXp: "飞行 XP",
+    researchCredits: "研究点数",
+    captainRank: "舰长等级",
+    scannedTargets: "已扫描目标",
+    badgesUnlocked: "已解锁徽章",
+    discoveries: "发现卡片",
+    badges: "任务徽章",
+    unlocked: "已解锁",
+    lockedDiscovery: "未解锁发现",
+    scanToUnlock: "扫描相关目标后解锁",
+    focusTarget: "聚焦目标",
+    observationPrompt: "观察提示",
+    progressHints: "进度提示",
+    collectionHint:
+      "扫描海王星可解锁史诗级冰巨星卡片；继续前往柯伊伯带可扩展外侧边疆记录。",
     archives: "档案",
     archiveCatalog: "任务档案馆",
     archiveDisclaimer:
@@ -538,6 +582,7 @@ export default function Hud({
   archiveExpeditionMode,
   completedTourStopIds,
   currentArchiveWaypointIndex,
+  playerProgress,
   selectedArchiveMissionId,
   tourMode,
   tourPanelOpen,
@@ -730,6 +775,7 @@ export default function Hud({
             explorationPoint={explorationPoint}
             language={language}
             missionStepIndex={missionStepIndex}
+            playerProgress={playerProgress}
             recommendedMission={recommendedMission}
             selectedArchiveMission={selectedArchiveMission}
             archiveExpeditionMode={archiveExpeditionMode}
@@ -1361,6 +1407,7 @@ function LeftPanel({
   explorationPoint,
   language,
   missionStepIndex,
+  playerProgress,
   recommendedMission,
   selectedArchiveMission,
   archiveExpeditionMode,
@@ -1413,6 +1460,7 @@ function LeftPanel({
   explorationPoint: ExplorationPoint;
   language: Language;
   missionStepIndex: number;
+  playerProgress: PlayerProgress;
   recommendedMission: Mission;
   selectedArchiveMission: ArchiveMission | null;
   archiveExpeditionMode: ArchiveExpeditionMode;
@@ -1501,7 +1549,14 @@ function LeftPanel({
           className="flex overflow-x-auto overscroll-x-contain [scrollbar-color:rgba(34,211,238,0.45)_rgba(15,23,42,0.35)] [scrollbar-width:thin]"
         >
           {(
-            ["info", "missions", "tour", "archives", "view"] as ActivePanel[]
+            [
+              "info",
+              "missions",
+              "tour",
+              "archives",
+              "collection",
+              "view",
+            ] as ActivePanel[]
           ).map((panel) => (
             <button
               key={panel}
@@ -1584,6 +1639,13 @@ function LeftPanel({
             onStartArchiveExpedition={onStartArchiveExpedition}
             onViewArchiveRoute={onViewArchiveRoute}
           />
+        ) : activePanel === "collection" ? (
+          <CollectionTab
+            copy={copy}
+            language={language}
+            playerProgress={playerProgress}
+            onSelectTarget={onSelectTarget}
+          />
         ) : (
           <ViewTab
             controlSensitivity={controlSensitivity}
@@ -1608,6 +1670,7 @@ function getPanelLabel(panel: ActivePanel, copy: (typeof COPY)[Language]) {
   if (panel === "missions") return copy.missions;
   if (panel === "tour") return copy.tour;
   if (panel === "archives") return copy.archives;
+  if (panel === "collection") return copy.collection;
   return copy.view;
 }
 
@@ -2671,6 +2734,223 @@ function ArchivesTab({
   );
 }
 
+function CollectionTab({
+  copy,
+  language,
+  playerProgress,
+  onSelectTarget,
+}: {
+  copy: (typeof COPY)[Language];
+  language: Language;
+  playerProgress: PlayerProgress;
+  onSelectTarget: (target: SelectedTarget) => void;
+}) {
+  const scannedCount = playerProgress.scannedTargetIds.length;
+  const unlockedBadgeCount = playerProgress.unlockedBadgeIds.length;
+  const captainRank = getCaptainRank(playerProgress.flightXp, language);
+
+  return (
+    <div className="grid gap-3">
+      <section className="border border-cyan-300/25 bg-cyan-950/14 p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
+          {copy.collectionTitle}
+        </p>
+        <p className="mt-2 text-xs leading-5 text-slate-400">
+          {copy.collectionSubtitle}
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <ProgressMetric label={copy.flightXp} value={playerProgress.flightXp.toString()} />
+          <ProgressMetric
+            label={copy.researchCredits}
+            value={playerProgress.researchCredits.toString()}
+          />
+          <ProgressMetric label={copy.captainRank} value={captainRank} />
+          <ProgressMetric
+            label={copy.scannedTargets}
+            value={`${scannedCount}/${LOCKABLE_TARGETS.length}`}
+          />
+          <ProgressMetric
+            label={copy.badgesUnlocked}
+            value={`${unlockedBadgeCount}/${MISSION_BADGES.length}`}
+          />
+          <ProgressMetric
+            label={copy.discoveries}
+            value={`${playerProgress.unlockedDiscoveryCardIds.length}/${SCAN_DISCOVERY_CARDS.length}`}
+          />
+        </div>
+      </section>
+
+      <section className="border border-white/10 bg-white/[0.03] p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          {copy.progressHints}
+        </p>
+        <p className="mt-2 text-xs leading-5 text-slate-300">
+          {copy.collectionHint}
+        </p>
+      </section>
+
+      <section className="grid gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          {copy.discoveries}
+        </p>
+        {SCAN_DISCOVERY_CARDS.map((card) => {
+          const unlocked =
+            playerProgress.unlockedDiscoveryCardIds.includes(card.id);
+          const cardCopy = getScanDiscoveryCardCopy(card, language);
+          const targetName = SPACE_OBJECTS[card.relatedTarget].name[language];
+
+          if (!unlocked) {
+            return (
+              <div
+                key={card.id}
+                className="border border-white/10 bg-white/[0.02] p-3 opacity-75"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-300">
+                    {copy.lockedDiscovery}
+                  </p>
+                  <span className={getRarityClass(card.rarity)}>
+                    {formatRarity(card.rarity, language)}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  {copy.scanToUnlock}: {targetName}
+                </p>
+              </div>
+            );
+          }
+
+          return (
+            <button
+              key={card.id}
+              type="button"
+              onClick={() => onSelectTarget(card.relatedTarget)}
+              className="border border-cyan-300/20 bg-cyan-950/10 p-3 text-left transition hover:border-cyan-200/55"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-slate-100">
+                    {cardCopy.title}
+                  </p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-cyan-100/70">
+                    {cardCopy.subtitle}
+                  </p>
+                </div>
+                <span className={getRarityClass(card.rarity)}>
+                  {formatRarity(card.rarity, language)}
+                </span>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-slate-300">
+                {cardCopy.description}
+              </p>
+              <p className="mt-3 border-l border-emerald-300/30 pl-3 text-[11px] leading-5 text-emerald-100/75">
+                {copy.observationPrompt}: {cardCopy.observationPrompt}
+              </p>
+              <div className="mt-3 flex items-center justify-between gap-2 text-[9px] uppercase tracking-[0.14em]">
+                <span className="text-slate-500">{targetName}</span>
+                <span className="text-cyan-100">{copy.focusTarget}</span>
+              </div>
+            </button>
+          );
+        })}
+      </section>
+
+      <section className="grid gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          {copy.badges}
+        </p>
+        {MISSION_BADGES.map((badge) => {
+          const unlocked = playerProgress.unlockedBadgeIds.includes(badge.id);
+          const badgeCopy = getMissionBadgeCopy(badge, language);
+
+          return (
+            <div
+              key={badge.id}
+              className={[
+                "border p-3",
+                unlocked
+                  ? "border-emerald-300/25 bg-emerald-950/12"
+                  : "border-white/10 bg-white/[0.02] opacity-60",
+              ].join(" ")}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-100">
+                  {badgeCopy.title}
+                </p>
+                <span className="text-[8px] uppercase tracking-[0.14em] text-slate-500">
+                  {unlocked ? copy.unlocked : copy.lockedDiscovery}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-emerald-100/65">
+                {badgeCopy.subtitle}
+              </p>
+              {unlocked ? (
+                <p className="mt-2 text-xs leading-5 text-slate-400">
+                  {badgeCopy.description}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </section>
+    </div>
+  );
+}
+
+function ProgressMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-white/10 bg-black/20 p-2">
+      <p className="text-[8px] uppercase tracking-[0.16em] text-slate-500">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-cyan-100">{value}</p>
+    </div>
+  );
+}
+
+function formatRarity(
+  rarity: (typeof SCAN_DISCOVERY_CARDS)[number]["rarity"],
+  language: Language,
+) {
+  const labels = {
+    en: {
+      common: "Common",
+      epic: "Epic",
+      rare: "Rare",
+      uncommon: "Uncommon",
+    },
+    zh: {
+      common: "普通",
+      epic: "史诗",
+      rare: "稀有",
+      uncommon: "进阶",
+    },
+  };
+
+  return labels[language][rarity];
+}
+
+function getRarityClass(
+  rarity: (typeof SCAN_DISCOVERY_CARDS)[number]["rarity"],
+) {
+  const shared =
+    "shrink-0 border px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.12em]";
+
+  if (rarity === "epic") {
+    return `${shared} border-violet-300/35 bg-violet-950/20 text-violet-100`;
+  }
+
+  if (rarity === "rare") {
+    return `${shared} border-cyan-300/35 bg-cyan-950/18 text-cyan-100`;
+  }
+
+  if (rarity === "uncommon") {
+    return `${shared} border-emerald-300/35 bg-emerald-950/18 text-emerald-100`;
+  }
+
+  return `${shared} border-slate-300/20 bg-white/[0.03] text-slate-300`;
+}
+
 function ViewTab({
   controlSensitivity,
   copy,
@@ -3728,9 +4008,13 @@ function formatLogEvent(type: ExplorationLogEntry["type"], language: Language) {
     autopilot_engaged: "AUTOPILOT ENGAGED",
     cockpit_entered: "COCKPIT ENTERED",
     cockpit_exited: "COCKPIT EXITED",
+    badge_unlocked: "BADGE UNLOCKED",
+    discovery_unlocked: "DISCOVERY UNLOCKED",
     mission_completed: "MISSION COMPLETE",
     mission_started: "MISSION STARTED",
     mission_step: "MISSION STEP",
+    rank_updated: "RANK UPDATED",
+    reward_granted: "REWARD GRANTED",
     scan_complete: "SCAN COMPLETE",
     scan_started: "SCAN STARTED",
     target_locked: "TARGET LOCKED",
@@ -3749,9 +4033,13 @@ function formatLogEvent(type: ExplorationLogEntry["type"], language: Language) {
     autopilot_engaged: "自动导航启动",
     cockpit_entered: "驾驶舱进入",
     cockpit_exited: "驾驶舱退出",
+    badge_unlocked: "徽章解锁",
+    discovery_unlocked: "发现解锁",
     mission_completed: "任务完成",
     mission_started: "任务启动",
     mission_step: "任务步骤",
+    rank_updated: "等级更新",
+    reward_granted: "奖励发放",
     scan_complete: "扫描完成",
     scan_started: "扫描启动",
     target_locked: "目标锁定",

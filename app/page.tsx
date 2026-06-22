@@ -16,6 +16,13 @@ import {
   getArchiveMissionCopy,
   getMissionWaypointCopy,
 } from "./data/archiveMissions";
+import {
+  getDiscoveryCardById,
+  getScanDiscoveryCardCopy,
+} from "./data/discoveryCards";
+import { getMissionBadgeById, getMissionBadgeCopy } from "./data/missionBadges";
+import { getCaptainRank, getCaptainRankId } from "./data/playerProgress";
+import { SCAN_REWARDS } from "./data/scanRewards";
 import { SPACE_OBJECTS } from "./data/spaceObjects";
 import { getTourById, getTourCopy, getTourStopCopy } from "./data/tours";
 import type {
@@ -36,8 +43,11 @@ import type {
   Language,
   LockBehavior,
   Mission,
+  MissionBadgeId,
   MissionWaypoint,
   MarsExplorationPoint,
+  DiscoveryCardId,
+  PlayerProgress,
   SelectedTarget,
   SimMode,
   TourId,
@@ -81,7 +91,14 @@ export default function Home() {
     targetCentered: false,
     throttle: 0,
   });
-  const [scannedTargetIds, setScannedTargetIds] = useState<SelectedTarget[]>([]);
+  const [playerProgress, setPlayerProgress] = useState<PlayerProgress>({
+    captainTitles: [],
+    flightXp: 0,
+    researchCredits: 0,
+    scannedTargetIds: [],
+    unlockedBadgeIds: [],
+    unlockedDiscoveryCardIds: [],
+  });
   const [language, setLanguage] = useState<Language>("zh");
   const [nearestTarget, setNearestTarget] = useState<SelectedTarget>("earth");
   const [lockBehavior, setLockBehavior] = useState<LockBehavior>("fly");
@@ -138,6 +155,7 @@ export default function Home() {
   const startScanHandlerRef = useRef<() => void>(() => undefined);
   const scanIntervalRef = useRef<number | null>(null);
   const scanTimeoutRef = useRef<number | null>(null);
+  const playerProgressRef = useRef<PlayerProgress>(playerProgress);
   const activeTour = getTourById(activeTourId);
   const currentTourStop = activeTour?.stops[activeTourStopIndex] ?? null;
   const selectedArchiveMission = getArchiveMissionById(selectedArchiveMissionId);
@@ -186,6 +204,10 @@ export default function Home() {
     exitCockpitHandlerRef.current = handleExitCockpit;
     startScanHandlerRef.current = handleStartScan;
   });
+
+  useEffect(() => {
+    playerProgressRef.current = playerProgress;
+  }, [playerProgress]);
 
   useEffect(() => {
     if (experienceMode !== "cockpit") return;
@@ -259,6 +281,158 @@ export default function Home() {
       },
       ...currentLog,
     ]);
+  }
+
+  function mergeUnique<T extends string>(currentItems: T[], nextItems: T[]) {
+    return Array.from(new Set([...currentItems, ...nextItems]));
+  }
+
+  function getRewardToast(
+    target: SelectedTarget,
+    cardIds: DiscoveryCardId[],
+    badgeIds: MissionBadgeId[],
+    xp: number,
+    credits: number,
+  ) {
+    const firstCard = cardIds
+      .map((cardId) => getDiscoveryCardById(cardId))
+      .find((card) => card !== null);
+    const firstBadge = badgeIds
+      .map((badgeId) => getMissionBadgeById(badgeId))
+      .find((badge) => badge !== null);
+    const targetName = SPACE_OBJECTS[target].name[language];
+    const cardCopy = firstCard
+      ? getScanDiscoveryCardCopy(firstCard, language)
+      : null;
+    const badgeCopy = firstBadge
+      ? getMissionBadgeCopy(firstBadge, language)
+      : null;
+
+    if (language === "zh") {
+      return [
+        `扫描完成：${targetName}`,
+        cardCopy ? `发现解锁：${cardCopy.title}` : null,
+        `+${xp} Flight XP`,
+        `+${credits} 研究点数`,
+        badgeCopy ? `徽章解锁：${badgeCopy.title}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
+
+    return [
+      `Scan complete: ${targetName}`,
+      cardCopy ? `Discovery unlocked: ${cardCopy.title}` : null,
+      `+${xp} Flight XP`,
+      `+${credits} Research Credits`,
+      badgeCopy ? `Badge unlocked: ${badgeCopy.title}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  function grantScanReward(target: SelectedTarget) {
+    const currentProgress = playerProgressRef.current;
+
+    if (currentProgress.scannedTargetIds.includes(target)) {
+      showToast(
+        language === "zh"
+          ? `${SPACE_OBJECTS[target].name.zh} 已扫描，奖励不会重复发放`
+          : `${SPACE_OBJECTS[target].name.en} already scanned. Rewards are not repeated.`,
+      );
+      return;
+    }
+
+    const reward = SCAN_REWARDS[target];
+    const xp = reward.xp ?? 0;
+    const credits = reward.researchCredits ?? 0;
+    const discoveryCardIds = reward.discoveryCardIds ?? [];
+    const badgeIds = reward.badgeIds ?? [];
+    const newDiscoveryCardIds = discoveryCardIds.filter(
+      (cardId) => !currentProgress.unlockedDiscoveryCardIds.includes(cardId),
+    );
+    const newBadgeIds = badgeIds.filter(
+      (badgeId) => !currentProgress.unlockedBadgeIds.includes(badgeId),
+    );
+    const previousRankId = getCaptainRankId(currentProgress.flightXp);
+    const nextFlightXp = currentProgress.flightXp + xp;
+    const nextRankId = getCaptainRankId(nextFlightXp);
+    const nextCaptainTitles =
+      previousRankId === nextRankId
+        ? currentProgress.captainTitles
+        : mergeUnique(currentProgress.captainTitles, [nextRankId]);
+    const nextProgress: PlayerProgress = {
+      ...currentProgress,
+      captainTitles: nextCaptainTitles,
+      flightXp: nextFlightXp,
+      researchCredits: currentProgress.researchCredits + credits,
+      scannedTargetIds: [...currentProgress.scannedTargetIds, target],
+      selectedCaptainTitle:
+        previousRankId === nextRankId
+          ? currentProgress.selectedCaptainTitle
+          : nextRankId,
+      unlockedBadgeIds: mergeUnique(
+        currentProgress.unlockedBadgeIds,
+        badgeIds,
+      ),
+      unlockedDiscoveryCardIds: mergeUnique(
+        currentProgress.unlockedDiscoveryCardIds,
+        discoveryCardIds,
+      ),
+    };
+
+    playerProgressRef.current = nextProgress;
+    setPlayerProgress(nextProgress);
+
+    newDiscoveryCardIds.forEach((cardId) => {
+      const card = getDiscoveryCardById(cardId);
+      if (!card) return;
+
+      addCaptainLog(
+        cardId,
+        language === "zh"
+          ? `发现解锁 — ${getScanDiscoveryCardCopy(card, language).title}。`
+          : `DISCOVERY UNLOCKED — ${getScanDiscoveryCardCopy(card, language).title}.`,
+        "discovery_unlocked",
+      );
+    });
+
+    if (xp > 0 || credits > 0) {
+      addCaptainLog(
+        target,
+        language === "zh"
+          ? `奖励发放 — +${xp} XP，+${credits} 研究点数。`
+          : `REWARD GRANTED — +${xp} XP, +${credits} Research Credits.`,
+        "reward_granted",
+      );
+    }
+
+    newBadgeIds.forEach((badgeId) => {
+      const badge = getMissionBadgeById(badgeId);
+      if (!badge) return;
+
+      addCaptainLog(
+        badgeId,
+        language === "zh"
+          ? `徽章解锁 — ${getMissionBadgeCopy(badge, language).title}。`
+          : `BADGE UNLOCKED — ${getMissionBadgeCopy(badge, language).title}.`,
+        "badge_unlocked",
+      );
+    });
+
+    if (previousRankId !== nextRankId) {
+      addCaptainLog(
+        nextRankId,
+        language === "zh"
+          ? `等级更新 — ${getCaptainRank(nextFlightXp, language)}。`
+          : `RANK UPDATED — ${getCaptainRank(nextFlightXp, language)}.`,
+        "rank_updated",
+      );
+    }
+
+    showToast(
+      getRewardToast(target, newDiscoveryCardIds, newBadgeIds, xp, credits),
+    );
   }
 
   function dismissWelcome() {
@@ -948,7 +1122,9 @@ export default function Home() {
     setFlightState((currentState) => ({
       ...currentState,
       isScanning: false,
-      scanProgress: scannedTargetIds.includes(target) ? 100 : 0,
+      scanProgress: playerProgressRef.current.scannedTargetIds.includes(target)
+        ? 100
+        : 0,
     }));
   }
 
@@ -1062,11 +1238,11 @@ export default function Home() {
 
     if (flightState.isScanning) return;
 
-    if (scannedTargetIds.includes(selectedTarget)) {
+    if (playerProgressRef.current.scannedTargetIds.includes(selectedTarget)) {
       showToast(
         language === "zh"
-          ? `${SPACE_OBJECTS[selectedTarget].name.zh} 已扫描`
-          : `${SPACE_OBJECTS[selectedTarget].name.en} already scanned`,
+          ? `${SPACE_OBJECTS[selectedTarget].name.zh} 已扫描，奖励不会重复发放`
+          : `${SPACE_OBJECTS[selectedTarget].name.en} already scanned. Rewards are not repeated.`,
       );
       return;
     }
@@ -1084,6 +1260,8 @@ export default function Home() {
       return;
     }
 
+    const scannedTarget = selectedTarget;
+
     clearScanTimers();
     setFlightState((currentState) => ({
       ...currentState,
@@ -1091,10 +1269,10 @@ export default function Home() {
       scanProgress: 0,
     }));
     addCaptainLog(
-      selectedTarget,
+      scannedTarget,
       language === "zh"
-        ? `扫描启动 — ${SPACE_OBJECTS[selectedTarget].name.zh}。`
-        : `SCAN STARTED — ${SPACE_OBJECTS[selectedTarget].name.en}.`,
+        ? `扫描启动 — ${SPACE_OBJECTS[scannedTarget].name.zh}。`
+        : `SCAN STARTED — ${SPACE_OBJECTS[scannedTarget].name.en}.`,
       "scan_started",
     );
 
@@ -1112,19 +1290,14 @@ export default function Home() {
         isScanning: false,
         scanProgress: 100,
       }));
-      setScannedTargetIds((currentIds) =>
-        currentIds.includes(selectedTarget)
-          ? currentIds
-          : [...currentIds, selectedTarget],
-      );
       addCaptainLog(
-        selectedTarget,
+        scannedTarget,
         language === "zh"
-          ? `扫描完成 — ${SPACE_OBJECTS[selectedTarget].name.zh} 轮廓已记录。`
-          : `SCAN COMPLETE — ${SPACE_OBJECTS[selectedTarget].name.en} profile recorded.`,
+          ? `扫描完成 — ${SPACE_OBJECTS[scannedTarget].name.zh} 轮廓已记录。`
+          : `SCAN COMPLETE — ${SPACE_OBJECTS[scannedTarget].name.en} profile recorded.`,
         "scan_complete",
       );
-      showToast(language === "zh" ? "扫描完成" : "Scan complete");
+      grantScanReward(scannedTarget);
     }, 1650);
   }
 
@@ -1234,6 +1407,7 @@ export default function Home() {
         currentArchiveWaypointIndex={currentArchiveWaypointIndex}
         archiveExpeditionMode={archiveExpeditionMode}
         archivePanelOpen={archivePanelOpen}
+        playerProgress={playerProgress}
         viewLayers={viewLayers}
         viewMode={viewMode}
         welcomeOpen={welcomeOpen}
@@ -1288,7 +1462,8 @@ export default function Home() {
           controlMode={controlMode}
           flightState={flightState}
           language={language}
-          scannedTargetIds={scannedTargetIds}
+          playerProgress={playerProgress}
+          scannedTargetIds={playerProgress.scannedTargetIds}
           selectedMissionId={selectedMissionId}
           selectedTarget={selectedTarget}
           onCancelAutopilot={handleCancelAutopilot}

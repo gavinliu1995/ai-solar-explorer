@@ -65,7 +65,13 @@ export type LockBehavior = "fly" | "preserve";
 
 export type ControlSensitivity = "low" | "normal" | "high";
 
-export type ActivePanel = "info" | "missions" | "tour" | "archives" | "view";
+export type ActivePanel =
+  | "info"
+  | "missions"
+  | "tour"
+  | "archives"
+  | "collection"
+  | "view";
 
 export type ViewMode = "solar-system" | "celestial-sphere";
 
@@ -232,12 +238,83 @@ export type ArchiveMission = {
 
 export type ArchiveExpeditionMode = "idle" | "active" | "completed";
 
-export type DiscoveryCard = {
+export type ArchiveDiscoveryCard = {
   id: string;
   missionId: ArchiveMissionId;
   title: string;
   body: string;
   relatedTarget: SpaceTarget;
+};
+
+export type RewardType =
+  | "flight-xp"
+  | "research-credit"
+  | "discovery-card"
+  | "mission-badge"
+  | "captain-title";
+
+export type DiscoveryRarity = "common" | "uncommon" | "rare" | "epic";
+
+export type DiscoveryCardId =
+  | "earth-atmosphere-profile"
+  | "moon-crater-survey"
+  | "mars-ancient-water-signature"
+  | "asteroid-belt-density-map"
+  | "ceres-bright-deposits"
+  | "jupiter-storm-band-profile"
+  | "saturn-ring-particle-profile"
+  | "uranus-tilted-axis-profile"
+  | "neptune-wind-profile"
+  | "pluto-charon-context"
+  | "kuiper-belt-icy-frontier"
+  | "sun-corona-profile"
+  | "venus-cloud-deck-profile"
+  | "mercury-crater-profile";
+
+export type MissionBadgeId =
+  | "inner-worlds-observer"
+  | "mars-field-surveyor"
+  | "giant-planet-navigator"
+  | "ring-system-analyst"
+  | "ice-giant-surveyor"
+  | "outer-frontier-pilot"
+  | "grand-tour-cadet"
+  | "voyager-route-observer";
+
+export type DiscoveryCard = {
+  id: DiscoveryCardId;
+  title: string;
+  subtitle: string;
+  relatedTarget: SpaceTarget;
+  rarity: DiscoveryRarity;
+  description: string;
+  observationPrompt: string;
+  unlockedBy: string;
+};
+
+export type MissionBadge = {
+  id: MissionBadgeId;
+  title: string;
+  subtitle: string;
+  description: string;
+};
+
+export type RewardGrant = {
+  xp?: number;
+  researchCredits?: number;
+  discoveryCardIds?: DiscoveryCardId[];
+  badgeIds?: MissionBadgeId[];
+  captainTitle?: string;
+};
+
+export type PlayerProgress = {
+  flightXp: number;
+  researchCredits: number;
+  unlockedDiscoveryCardIds: DiscoveryCardId[];
+  unlockedBadgeIds: MissionBadgeId[];
+  captainTitles: string[];
+  selectedCaptainTitle?: string;
+  scannedTargetIds: SpaceTarget[];
 };
 
 export type ExplorationLogEventType =
@@ -259,7 +336,11 @@ export type ExplorationLogEventType =
   | "autopilot_engaged"
   | "autopilot_complete"
   | "scan_started"
-  | "scan_complete";
+  | "scan_complete"
+  | "reward_granted"
+  | "discovery_unlocked"
+  | "badge_unlocked"
+  | "rank_updated";
 
 export type ExplorationLogEntry = {
   id: string;

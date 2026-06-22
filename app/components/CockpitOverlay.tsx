@@ -1,11 +1,20 @@
 "use client";
 
 import { getMissionById, getMissionCopy } from "@/app/data/missions";
+import {
+  getDiscoveryCardById,
+  getScanDiscoveryCardCopy,
+} from "@/app/data/discoveryCards";
+import { getMissionBadgeById, getMissionBadgeCopy } from "@/app/data/missionBadges";
+import { getCaptainRank } from "@/app/data/playerProgress";
+import { SCAN_REWARDS } from "@/app/data/scanRewards";
 import { SPACE_OBJECTS } from "@/app/data/spaceObjects";
+import { LOCKABLE_TARGETS } from "@/app/types/space";
 import type {
   ControlMode,
   FlightState,
   Language,
+  PlayerProgress,
   SelectedTarget,
 } from "@/app/types/space";
 import CockpitFrame from "./CockpitFrame";
@@ -14,6 +23,7 @@ type CockpitOverlayProps = {
   controlMode: ControlMode;
   flightState: FlightState;
   language: Language;
+  playerProgress: PlayerProgress;
   scannedTargetIds: SelectedTarget[];
   selectedMissionId: string | null;
   selectedTarget: SelectedTarget;
@@ -49,8 +59,10 @@ const COPY = {
     navigation: "Target Navigation",
     outOfRange: "Out of Range",
     profile: "Profile",
+    researchCredits: "Research Credits",
     proximity: "Proximity Warning",
     recorded: "Recorded to Captain's Log",
+    reward: "Reward",
     scan: "Scan",
     scanAvailable: "Scan Available",
     scanComplete: "Scan Complete",
@@ -59,11 +71,16 @@ const COPY = {
     scanResult: "Scan Result",
     scanStatus: "Scan Status",
     scanKey: "X Scan",
+    scannedCount: "Scanned",
     speed: "Speed",
+    status: "Status",
+    rank: "Rank",
     targetCentered: "Target Centered",
     targetDirection: "Target Direction",
     title: "Cockpit Mode",
     throttle: "Throttle",
+    unrecorded: "Unrecorded",
+    xp: "Flight XP",
     upDown: "Q / E Vertical",
     escape: "Esc Exit Cockpit",
   },
@@ -91,8 +108,10 @@ const COPY = {
     navigation: "目标导航",
     outOfRange: "超出扫描范围",
     profile: "轮廓",
+    researchCredits: "研究点数",
     proximity: "接近警告",
     recorded: "已写入航行日志",
+    reward: "奖励",
     scan: "扫描",
     scanAvailable: "可扫描",
     scanComplete: "扫描完成",
@@ -101,11 +120,16 @@ const COPY = {
     scanResult: "扫描结果",
     scanStatus: "扫描状态",
     scanKey: "X 扫描",
+    scannedCount: "已扫描",
     speed: "速度",
+    status: "状态",
+    rank: "等级",
     targetCentered: "目标居中",
     targetDirection: "目标方向",
     title: "驾驶舱模式",
     throttle: "推进",
+    unrecorded: "未记录",
+    xp: "飞行 XP",
     upDown: "Q / E 垂直",
     escape: "Esc 退出驾驶舱",
   },
@@ -115,6 +139,7 @@ export default function CockpitOverlay({
   controlMode,
   flightState,
   language,
+  playerProgress,
   scannedTargetIds,
   selectedMissionId,
   selectedTarget,
@@ -149,6 +174,19 @@ export default function CockpitOverlay({
       (180 / Math.PI) +
     90;
   const scanProfile = getScanProfile(selectedTarget, language);
+  const reward = SCAN_REWARDS[selectedTarget];
+  const scanCard = (reward.discoveryCardIds ?? [])
+    .map((cardId) => getDiscoveryCardById(cardId))
+    .find((card) => card !== null);
+  const scanBadge = (reward.badgeIds ?? [])
+    .map((badgeId) => getMissionBadgeById(badgeId))
+    .find((badge) => badge !== null);
+  const scanCardCopy = scanCard
+    ? getScanDiscoveryCardCopy(scanCard, language)
+    : null;
+  const scanBadgeCopy = scanBadge
+    ? getMissionBadgeCopy(scanBadge, language)
+    : null;
 
   return (
     <div className="pointer-events-none fixed inset-0 z-30 text-cyan-50">
@@ -211,6 +249,23 @@ export default function CockpitOverlay({
         <TelemetryRow
           label={copy.throttle}
           value={`${Math.round(flightState.throttle * 100)}%`}
+        />
+        <TelemetryRow label={copy.xp} value={playerProgress.flightXp.toString()} />
+        <TelemetryRow
+          label={copy.researchCredits}
+          value={playerProgress.researchCredits.toString()}
+        />
+        <TelemetryRow
+          label={copy.scannedCount}
+          value={`${playerProgress.scannedTargetIds.length}/${LOCKABLE_TARGETS.length}`}
+        />
+        <TelemetryRow
+          label={copy.status}
+          value={isScanned ? copy.scanned : copy.unrecorded}
+        />
+        <TelemetryRow
+          label={copy.rank}
+          value={getCaptainRank(playerProgress.flightXp, language)}
         />
         <TelemetryRow
           label={copy.controlMode}
@@ -320,6 +375,21 @@ export default function CockpitOverlay({
             <p className="text-xs leading-5 text-slate-300">
               {copy.profile}: {scanProfile}
             </p>
+            {scanCardCopy ? (
+              <p className="mt-2 text-xs leading-5 text-cyan-100">
+                {copy.scanResult}: {scanCardCopy.title}
+              </p>
+            ) : null}
+            <p className="mt-2 text-xs leading-5 text-slate-300">
+              {copy.reward}: +{reward.xp ?? 0} XP / +
+              {reward.researchCredits ?? 0}{" "}
+              {language === "zh" ? "研究点数" : "Research Credits"}
+            </p>
+            {scanBadgeCopy ? (
+              <p className="mt-1 text-xs leading-5 text-emerald-100">
+                {language === "zh" ? "徽章" : "Badge"}: {scanBadgeCopy.title}
+              </p>
+            ) : null}
             <p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-slate-500">
               {copy.recorded}
             </p>

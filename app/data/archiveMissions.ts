@@ -1,8 +1,8 @@
 import type {
+  ArchiveDiscoveryCard,
   ArchiveMission,
   ArchiveMissionCategory,
   ArchiveMissionId,
-  DiscoveryCard,
   Language,
   MissionWaypoint,
   SpaceTarget,
@@ -294,7 +294,7 @@ export const ARCHIVE_MISSIONS: ArchiveMission[] = [
   },
 ];
 
-export const DISCOVERY_CARDS: DiscoveryCard[] = [
+export const DISCOVERY_CARDS: ArchiveDiscoveryCard[] = [
   discovery("voyager-1-scale", "voyager-1", "Outer Scale", "A flyby route turns the giant planets into distance markers for deep-space context.", "saturn"),
   discovery("voyager-2-ice", "voyager-2", "Ice Giant Contrast", "Uranus and Neptune become comparable worlds inside one archive route.", "uranus"),
   discovery("cassini-rings", "cassini", "Ring System Archive", "Saturn's rings are treated as a structured system, not a decorative halo.", "saturn"),
@@ -319,7 +319,7 @@ type ArchiveMissionCopy = Pick<
   | "subtitle"
 >;
 type WaypointCopy = Pick<MissionWaypoint, "description" | "label">;
-type DiscoveryCopy = Pick<DiscoveryCard, "body" | "title">;
+type DiscoveryCopy = Pick<ArchiveDiscoveryCard, "body" | "title">;
 
 const ARCHIVE_MISSION_ZH: Record<ArchiveMissionId, ArchiveMissionCopy> = {
   "voyager-1": {
@@ -536,7 +536,7 @@ export function getMissionWaypointCopy(
 }
 
 export function getDiscoveryCardCopy(
-  card: DiscoveryCard,
+  card: ArchiveDiscoveryCard,
   language: Language,
 ): DiscoveryCopy {
   if (language === "zh") return DISCOVERY_ZH[card.id] ?? card;
