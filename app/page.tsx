@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import CockpitOverlay from "./components/CockpitOverlay";
 import Hud from "./components/Hud";
 import {
   getMissionCopy,
@@ -25,9 +26,12 @@ import type {
   CameraCommand,
   CameraCommandType,
   CameraMode,
+  ControlMode,
   ControlSensitivity,
+  ExperienceMode,
   ExplorationLogEntry,
   ExplorationPoint,
+  FlightState,
   HudMode,
   Language,
   LockBehavior,
@@ -57,6 +61,27 @@ export default function Home() {
   const [explorationPoint, setExplorationPoint] =
     useState<ExplorationPoint>(null);
   const [cameraMode, setCameraMode] = useState<CameraMode>("locked");
+  const [experienceMode, setExperienceMode] =
+    useState<ExperienceMode>("mission-control");
+  const [controlMode, setControlMode] = useState<ControlMode>("orbit");
+  const [flightState, setFlightState] = useState<FlightState>({
+    approachZone: false,
+    autopilotProgress: 0,
+    distanceToTarget: null,
+    etaSeconds: null,
+    isScanning: false,
+    proximityWarning: false,
+    scanAligned: false,
+    scanAvailable: false,
+    scanInRange: false,
+    scanProgress: 0,
+    speed: 0,
+    targetBearingX: 0,
+    targetBearingY: 0,
+    targetCentered: false,
+    throttle: 0,
+  });
+  const [scannedTargetIds, setScannedTargetIds] = useState<SelectedTarget[]>([]);
   const [language, setLanguage] = useState<Language>("zh");
   const [nearestTarget, setNearestTarget] = useState<SelectedTarget>("earth");
   const [lockBehavior, setLockBehavior] = useState<LockBehavior>("fly");
@@ -109,11 +134,27 @@ export default function Home() {
     useState<ArchiveExpeditionMode>("idle");
   const cameraCommandNonceRef = useRef(0);
   const lastLoggedTargetRef = useRef<SelectedTarget>("earth");
+  const exitCockpitHandlerRef = useRef<() => void>(() => undefined);
+  const startScanHandlerRef = useRef<() => void>(() => undefined);
+  const scanIntervalRef = useRef<number | null>(null);
+  const scanTimeoutRef = useRef<number | null>(null);
   const activeTour = getTourById(activeTourId);
   const currentTourStop = activeTour?.stops[activeTourStopIndex] ?? null;
   const selectedArchiveMission = getArchiveMissionById(selectedArchiveMissionId);
   const currentArchiveWaypoint =
     selectedArchiveMission?.waypoints[currentArchiveWaypointIndex] ?? null;
+
+  const clearScanTimers = useCallback(() => {
+    if (scanIntervalRef.current !== null) {
+      window.clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+
+    if (scanTimeoutRef.current !== null) {
+      window.clearTimeout(scanTimeoutRef.current);
+      scanTimeoutRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     const hasSeenWelcome = window.localStorage.getItem(
@@ -134,6 +175,56 @@ export default function Home() {
 
     return () => window.clearTimeout(timeout);
   }, [shareToast]);
+
+  useEffect(() => {
+    return () => {
+      clearScanTimers();
+    };
+  }, [clearScanTimers]);
+
+  useEffect(() => {
+    exitCockpitHandlerRef.current = handleExitCockpit;
+    startScanHandlerRef.current = handleStartScan;
+  });
+
+  useEffect(() => {
+    if (experienceMode !== "cockpit") return;
+
+    function isEditableTarget(target: EventTarget | null) {
+      if (!(target instanceof HTMLElement)) return false;
+
+      return (
+        target.isContentEditable ||
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT"
+      );
+    }
+
+    function handleCockpitKeyDown(event: KeyboardEvent) {
+      if (isEditableTarget(event.target) || searchOpen || menuOpen) return;
+
+      if (event.code === "Escape") {
+        event.preventDefault();
+        exitCockpitHandlerRef.current();
+        return;
+      }
+
+      if (event.code === "KeyF") {
+        event.preventDefault();
+        issueCameraCommand("close");
+        return;
+      }
+
+      if (event.code === "KeyX") {
+        event.preventDefault();
+        startScanHandlerRef.current();
+      }
+    }
+
+    window.addEventListener("keydown", handleCockpitKeyDown);
+    return () => window.removeEventListener("keydown", handleCockpitKeyDown);
+  }, [experienceMode, menuOpen, searchOpen]);
 
   function issueCameraCommand(type: CameraCommandType) {
     cameraCommandNonceRef.current += 1;
@@ -222,6 +313,7 @@ export default function Home() {
     const stopCopy = getTourStopCopy(stop, language);
 
     setSelectedTarget(stop.target);
+    resetScanForTarget(stop.target);
     setExplorationPoint(null);
     setSelectedMissionId(null);
     setMissionStepIndex(0);
@@ -261,6 +353,7 @@ export default function Home() {
 
     setCurrentArchiveWaypointIndex(waypointIndex);
     setSelectedTarget(waypoint.target);
+    resetScanForTarget(waypoint.target);
     setExplorationPoint(null);
     setCameraMode("locked");
     setLockBehavior("fly");
@@ -428,6 +521,7 @@ export default function Home() {
   function handleSelectTarget(target: SelectedTarget) {
     setLockBehavior("fly");
     setSelectedTarget(target);
+    resetScanForTarget(target);
     setExplorationPoint(null);
     setSelectedMissionId(null);
     setMissionStepIndex(0);
@@ -439,6 +533,7 @@ export default function Home() {
   function handleLockTarget(target: SelectedTarget) {
     setLockBehavior("preserve");
     setSelectedTarget(target);
+    resetScanForTarget(target);
     setExplorationPoint(null);
     setSelectedMissionId(null);
     setMissionStepIndex(0);
@@ -479,6 +574,7 @@ export default function Home() {
     setSelectedMissionId(mission.id);
     setMissionStepIndex(0);
     setSelectedTarget(focusTarget);
+    resetScanForTarget(focusTarget);
     recordTargetLocked(focusTarget, mission.id);
     setExplorationPoint(mission.explorationPoint ?? null);
     setCameraMode("locked");
@@ -548,6 +644,7 @@ export default function Home() {
 
     if (currentStep.target) {
       setSelectedTarget(currentStep.target);
+      resetScanForTarget(currentStep.target);
       recordTargetLocked(currentStep.target, mission.id);
     }
 
@@ -822,6 +919,215 @@ export default function Home() {
     }
   }
 
+  function handleFlightStateChange(
+    nextFlightState: Pick<
+      FlightState,
+      | "approachZone"
+      | "autopilotProgress"
+      | "distanceToTarget"
+      | "etaSeconds"
+      | "proximityWarning"
+      | "scanAligned"
+      | "scanAvailable"
+      | "scanInRange"
+      | "speed"
+      | "targetBearingX"
+      | "targetBearingY"
+      | "targetCentered"
+      | "throttle"
+    >,
+  ) {
+    setFlightState((currentState) => ({
+      ...currentState,
+      ...nextFlightState,
+    }));
+  }
+
+  function resetScanForTarget(target: SelectedTarget) {
+    clearScanTimers();
+    setFlightState((currentState) => ({
+      ...currentState,
+      isScanning: false,
+      scanProgress: scannedTargetIds.includes(target) ? 100 : 0,
+    }));
+  }
+
+  function handleEnterCockpit() {
+    setExperienceMode("cockpit");
+    setControlMode("free-flight");
+    setCameraMode("free");
+    setHudMode("minimal");
+    setMenuOpen(false);
+    setSearchOpen(false);
+    setDetailOpen(false);
+    setWelcomeOpen(false);
+    issueCameraCommand("close");
+    addCaptainLog(
+      "cockpit",
+      language === "zh"
+        ? "驾驶舱进入 — 手动飞行界面已上线。"
+        : "COCKPIT ENTERED — Manual flight interface online.",
+      "cockpit_entered",
+    );
+    showToast(language === "zh" ? "驾驶舱模式已启动" : "Cockpit mode online");
+  }
+
+  function handleExitCockpit() {
+    clearScanTimers();
+    setExperienceMode("mission-control");
+    setControlMode("orbit");
+    setCameraMode("locked");
+    setLockBehavior("fly");
+    setHudMode("full");
+    setFlightState((currentState) => ({
+      ...currentState,
+      isScanning: false,
+      scanAligned: false,
+      scanAvailable: false,
+      scanInRange: false,
+      scanProgress: currentState.scanProgress >= 100 ? 100 : 0,
+      speed: 0,
+      throttle: 0,
+      autopilotProgress: 0,
+      etaSeconds: null,
+    }));
+    issueCameraCommand("focus");
+    addCaptainLog(
+      "cockpit",
+      language === "zh"
+        ? "驾驶舱退出 — 已返回任务控制视角。"
+        : "COCKPIT EXITED — Mission control view restored.",
+      "cockpit_exited",
+    );
+    showToast(
+      language === "zh"
+        ? "已返回任务控制视角"
+        : "Mission control view restored",
+    );
+  }
+
+  function handleEngageAutopilot() {
+    setExperienceMode("cockpit");
+    setControlMode("autopilot");
+    setCameraMode("free");
+    setLockBehavior("fly");
+    setFlightState((currentState) => ({
+      ...currentState,
+      autopilotProgress: 0,
+      etaSeconds: null,
+      speed: Math.max(currentState.speed, 14),
+      throttle: 1,
+    }));
+    addCaptainLog(
+      selectedTarget,
+      language === "zh"
+        ? `自动导航启动 — ${SPACE_OBJECTS[selectedTarget].name.zh} 接近向量已锁定。`
+        : `AUTOPILOT ENGAGED — ${SPACE_OBJECTS[selectedTarget].name.en} approach vector locked.`,
+      "autopilot_engaged",
+    );
+    showToast(language === "zh" ? "自动导航已启动" : "Autopilot engaged");
+  }
+
+  function handleCancelAutopilot() {
+    setControlMode("free-flight");
+    setFlightState((currentState) => ({
+      ...currentState,
+      autopilotProgress: 0,
+      etaSeconds: null,
+      throttle: 0,
+    }));
+    showToast(language === "zh" ? "自动导航已取消" : "Autopilot cancelled");
+  }
+
+  function handleAutopilotComplete() {
+    setControlMode("free-flight");
+    setFlightState((currentState) => ({
+      ...currentState,
+      autopilotProgress: 1,
+      etaSeconds: 0,
+      throttle: 0,
+    }));
+    addCaptainLog(
+      selectedTarget,
+      language === "zh"
+        ? `自动导航完成 — 已抵达 ${SPACE_OBJECTS[selectedTarget].name.zh} 附近。`
+        : `AUTOPILOT COMPLETE — Arrived near ${SPACE_OBJECTS[selectedTarget].name.en}.`,
+      "autopilot_complete",
+    );
+    showToast(language === "zh" ? "自动导航完成" : "Autopilot complete");
+  }
+
+  function handleStartScan() {
+    if (experienceMode !== "cockpit") return;
+
+    if (flightState.isScanning) return;
+
+    if (scannedTargetIds.includes(selectedTarget)) {
+      showToast(
+        language === "zh"
+          ? `${SPACE_OBJECTS[selectedTarget].name.zh} 已扫描`
+          : `${SPACE_OBJECTS[selectedTarget].name.en} already scanned`,
+      );
+      return;
+    }
+
+    if (!flightState.scanAvailable) {
+      showToast(
+        language === "zh"
+          ? flightState.scanInRange
+            ? "请先将目标对准扫描框"
+            : "距离过远，无法扫描当前目标"
+          : flightState.scanInRange
+            ? "Align target before scanning"
+            : "Target is out of scan range",
+      );
+      return;
+    }
+
+    clearScanTimers();
+    setFlightState((currentState) => ({
+      ...currentState,
+      isScanning: true,
+      scanProgress: 0,
+    }));
+    addCaptainLog(
+      selectedTarget,
+      language === "zh"
+        ? `扫描启动 — ${SPACE_OBJECTS[selectedTarget].name.zh}。`
+        : `SCAN STARTED — ${SPACE_OBJECTS[selectedTarget].name.en}.`,
+      "scan_started",
+    );
+
+    scanIntervalRef.current = window.setInterval(() => {
+      setFlightState((currentState) => ({
+        ...currentState,
+        scanProgress: Math.min(currentState.scanProgress + 8, 96),
+      }));
+    }, 120);
+
+    scanTimeoutRef.current = window.setTimeout(() => {
+      clearScanTimers();
+      setFlightState((currentState) => ({
+        ...currentState,
+        isScanning: false,
+        scanProgress: 100,
+      }));
+      setScannedTargetIds((currentIds) =>
+        currentIds.includes(selectedTarget)
+          ? currentIds
+          : [...currentIds, selectedTarget],
+      );
+      addCaptainLog(
+        selectedTarget,
+        language === "zh"
+          ? `扫描完成 — ${SPACE_OBJECTS[selectedTarget].name.zh} 轮廓已记录。`
+          : `SCAN COMPLETE — ${SPACE_OBJECTS[selectedTarget].name.en} profile recorded.`,
+        "scan_complete",
+      );
+      showToast(language === "zh" ? "扫描完成" : "Scan complete");
+    }, 1650);
+  }
+
   function handleRelatedItem(item: string) {
     const normalizedItem = item.toLowerCase();
     const explorationMatch = (
@@ -837,6 +1143,7 @@ export default function Home() {
 
     if (explorationMatch) {
       setSelectedTarget("mars");
+      resetScanForTarget("mars");
       setExplorationPoint(explorationMatch[0]);
       setSelectedMissionId(null);
       setMissionStepIndex(0);
@@ -880,10 +1187,14 @@ export default function Home() {
       <SolarSystemScene
         cameraCommand={cameraCommand}
         cameraMode={cameraMode}
+        controlMode={controlMode}
         controlSensitivity={controlSensitivity}
+        experienceMode={experienceMode}
         explorationPoint={explorationPoint}
         language={language}
         lockBehavior={lockBehavior}
+        onAutopilotComplete={handleAutopilotComplete}
+        onFlightStateChange={handleFlightStateChange}
         onLockTarget={handleLockTarget}
         onNearestTargetChange={setNearestTarget}
         onSelectArchiveWaypoint={handleSelectArchiveWaypoint}
@@ -897,9 +1208,11 @@ export default function Home() {
       <Hud
         activePanel={activePanel}
         cameraMode={cameraMode}
+        controlMode={controlMode}
         controlSensitivity={controlSensitivity}
         completedMissionIds={completedMissionIds}
         detailOpen={detailOpen}
+        experienceMode={experienceMode}
         explorationPoint={explorationPoint}
         explorationLog={explorationLog}
         hudMode={hudMode}
@@ -929,7 +1242,9 @@ export default function Home() {
         onCompleteMission={handleCompleteMission}
         onCompleteTourStop={handleCompleteTourStop}
         onDismissWelcome={dismissWelcome}
+        onEnterCockpit={handleEnterCockpit}
         onExitTour={handleExitTour}
+        onExitCockpit={handleExitCockpit}
         onFocusTourStop={handleFocusTourStop}
         onJumpToTourStop={handleJumpToTourStop}
         onNextTourStop={handleNextTourStop}
@@ -968,6 +1283,21 @@ export default function Home() {
         setViewLayers={setViewLayers}
         setViewMode={handleSetViewMode}
       />
+      {experienceMode === "cockpit" ? (
+        <CockpitOverlay
+          controlMode={controlMode}
+          flightState={flightState}
+          language={language}
+          scannedTargetIds={scannedTargetIds}
+          selectedMissionId={selectedMissionId}
+          selectedTarget={selectedTarget}
+          onCancelAutopilot={handleCancelAutopilot}
+          onEngageAutopilot={handleEngageAutopilot}
+          onExitCockpit={handleExitCockpit}
+          onFocusTarget={() => issueCameraCommand("close")}
+          onScan={handleStartScan}
+        />
+      ) : null}
     </main>
   );
 }

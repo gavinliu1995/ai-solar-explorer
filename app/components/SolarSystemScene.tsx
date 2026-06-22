@@ -13,7 +13,9 @@ import {
 import {
   AdditiveBlending,
   BufferGeometry,
+  Euler,
   Float32BufferAttribute,
+  Quaternion,
   Vector3,
 } from "three";
 import type { Camera } from "three";
@@ -44,8 +46,11 @@ import type {
   CameraCommandType,
   CameraMode,
   ArchiveMission,
+  ControlMode,
   ControlSensitivity,
+  ExperienceMode,
   ExplorationPoint,
+  FlightState,
   Language,
   LockBehavior,
   SelectedTarget,
@@ -61,10 +66,31 @@ import {
 type SolarSystemSceneProps = {
   cameraCommand: CameraCommand;
   cameraMode: CameraMode;
+  controlMode: ControlMode;
   controlSensitivity: ControlSensitivity;
+  experienceMode: ExperienceMode;
   explorationPoint: ExplorationPoint;
   language: Language;
   lockBehavior: LockBehavior;
+  onAutopilotComplete: () => void;
+  onFlightStateChange: (
+    state: Pick<
+      FlightState,
+      | "approachZone"
+      | "autopilotProgress"
+      | "distanceToTarget"
+      | "etaSeconds"
+      | "proximityWarning"
+      | "scanAligned"
+      | "scanAvailable"
+      | "scanInRange"
+      | "speed"
+      | "targetBearingX"
+      | "targetBearingY"
+      | "targetCentered"
+      | "throttle"
+    >,
+  ) => void;
   onLockTarget: (target: SelectedTarget) => void;
   onNearestTargetChange: (target: SelectedTarget) => void;
   onSelectArchiveWaypoint: (index: number) => void;
@@ -139,6 +165,11 @@ const TARGET_RADII: Record<SelectedTarget, number> = {
 const MAX_CAMERA_DISTANCE = 190;
 const MAX_FREE_CAMERA_DISTANCE = 230;
 const FREE_KEYBOARD_MOVE_SPEED = 6.8;
+const COCKPIT_ACCELERATION = 9.4;
+const COCKPIT_MAX_SPEED = 16.5;
+const COCKPIT_BRAKE_DAMPING = 9.5;
+const COCKPIT_IDLE_DAMPING = 2.3;
+const COCKPIT_MOUSE_SENSITIVITY = 0.002;
 const SENSITIVITY_MULTIPLIERS: Record<ControlSensitivity, number> = {
   low: 0.68,
   normal: 1,
@@ -153,6 +184,9 @@ const KEYBOARD_NAVIGATION_KEYS = new Set([
   "KeyA",
   "KeyS",
   "KeyD",
+  "KeyQ",
+  "KeyE",
+  "Space",
   "ShiftLeft",
   "ShiftRight",
   "AltLeft",
@@ -183,10 +217,14 @@ const NEPTUNE_MOONS = [
 export default function SolarSystemScene({
   cameraCommand,
   cameraMode,
+  controlMode,
   controlSensitivity,
+  experienceMode,
   explorationPoint,
   language,
   lockBehavior,
+  onAutopilotComplete,
+  onFlightStateChange,
   onLockTarget,
   onNearestTargetChange,
   onSelectArchiveWaypoint,
@@ -292,8 +330,12 @@ export default function SolarSystemScene({
         cameraCommand={cameraCommand}
         controlsRef={controlsRef}
         cameraMode={cameraMode}
+        controlMode={controlMode}
         controlSensitivity={controlSensitivity}
+        experienceMode={experienceMode}
         lockBehavior={lockBehavior}
+        onAutopilotComplete={onAutopilotComplete}
+        onFlightStateChange={onFlightStateChange}
         onNearestTargetChange={onNearestTargetChange}
         selectedTarget={selectedTarget}
         userControlVersionRef={userControlVersionRef}
@@ -302,20 +344,25 @@ export default function SolarSystemScene({
       <OrbitControls
         ref={controlsRef}
         dampingFactor={0.055}
+        enabled={experienceMode !== "cockpit"}
         enableDamping
-        enablePan={cameraMode === "free"}
+        enablePan={cameraMode === "free" || experienceMode === "cockpit"}
         maxDistance={
-          cameraMode === "free" ? MAX_FREE_CAMERA_DISTANCE : MAX_CAMERA_DISTANCE
+          cameraMode === "free" || experienceMode === "cockpit"
+            ? MAX_FREE_CAMERA_DISTANCE
+            : MAX_CAMERA_DISTANCE
         }
         minDistance={
-          cameraMode === "free" ? 0.28 : getMinCameraDistance(selectedTarget)
+          cameraMode === "free" || experienceMode === "cockpit"
+            ? 0.18
+            : getMinCameraDistance(selectedTarget)
         }
         onStart={() => {
           userControlVersionRef.current += 1;
         }}
         panSpeed={0.65}
         rotateSpeed={0.55}
-        screenSpacePanning={cameraMode === "free"}
+        screenSpacePanning={cameraMode === "free" || experienceMode === "cockpit"}
         zoomSpeed={2.05}
       />
     </Canvas>
@@ -690,9 +737,13 @@ function ProbeLayer() {
 function CameraRig({
   cameraCommand,
   cameraMode,
+  controlMode,
   controlSensitivity,
   controlsRef,
+  experienceMode,
   lockBehavior,
+  onAutopilotComplete,
+  onFlightStateChange,
   onNearestTargetChange,
   selectedTarget,
   userControlVersionRef,
@@ -700,27 +751,65 @@ function CameraRig({
 }: {
   cameraCommand: CameraCommand;
   cameraMode: CameraMode;
+  controlMode: ControlMode;
   controlSensitivity: ControlSensitivity;
   controlsRef: RefObject<OrbitControlsHandle | null>;
+  experienceMode: ExperienceMode;
   lockBehavior: LockBehavior;
+  onAutopilotComplete: () => void;
+  onFlightStateChange: (
+    state: Pick<
+      FlightState,
+      | "approachZone"
+      | "autopilotProgress"
+      | "distanceToTarget"
+      | "etaSeconds"
+      | "proximityWarning"
+      | "scanAligned"
+      | "scanAvailable"
+      | "scanInRange"
+      | "speed"
+      | "targetBearingX"
+      | "targetBearingY"
+      | "targetCentered"
+      | "throttle"
+    >,
+  ) => void;
   onNearestTargetChange: (target: SelectedTarget) => void;
   selectedTarget: SelectedTarget;
   userControlVersionRef: { current: number };
   viewMode: ViewMode;
 }) {
-  const { camera } = useThree();
+  const { camera, gl } = useThree();
   const autoFlightActiveRef = useRef(false);
   const commandFlightActiveRef = useRef(false);
   const initializedRef = useRef(false);
+  const autopilotCompleteNotifiedRef = useRef(false);
+  const autopilotStartDistanceRef = useRef(1);
+  const lastAutopilotTargetRef = useRef<SelectedTarget | null>(null);
+  const lastControlModeRef = useRef<ControlMode>(controlMode);
   const lastCameraCommandNonceRef = useRef<number | null>(null);
   const lastCameraModeRef = useRef<CameraMode>(cameraMode);
   const lastNearestTargetRef = useRef<SelectedTarget>(selectedTarget);
   const lastSelectedTargetRef = useRef<SelectedTarget>(selectedTarget);
   const lastUserControlVersionRef = useRef(0);
+  const flightTelemetryElapsedRef = useRef(0);
   const pressedKeysRef = useRef<Set<string>>(new Set());
+  const cockpitYawRef = useRef(0);
+  const cockpitPitchRef = useRef(0);
+  const cockpitPointerRef = useRef({ dragging: false, x: 0, y: 0 });
   const freeMovementVector = useMemo(() => new Vector3(), []);
   const freeForwardVector = useMemo(() => new Vector3(), []);
   const freeRightVector = useMemo(() => new Vector3(), []);
+  const cockpitVelocity = useMemo(() => new Vector3(), []);
+  const cockpitAcceleration = useMemo(() => new Vector3(), []);
+  const cockpitForwardVector = useMemo(() => new Vector3(), []);
+  const cockpitRightVector = useMemo(() => new Vector3(), []);
+  const cockpitUpVector = useMemo(() => new Vector3(0, 1, 0), []);
+  const cockpitTargetDirection = useMemo(() => new Vector3(), []);
+  const cockpitLocalDirection = useMemo(() => new Vector3(), []);
+  const cockpitInverseQuaternion = useMemo(() => new Quaternion(), []);
+  const cockpitRotation = useMemo(() => new Euler(0, 0, 0, "YXZ"), []);
   const targetPlanetPosition = useMemo(() => new Vector3(), []);
   const commandTargetPosition = useMemo(() => new Vector3(), []);
   const targetCameraPosition = useMemo(() => new Vector3(), []);
@@ -743,7 +832,7 @@ function CameraRig({
 
     function handleKeyDown(event: KeyboardEvent) {
       if (
-        cameraMode === "free" &&
+        (cameraMode === "free" || experienceMode === "cockpit") &&
         KEYBOARD_NAVIGATION_KEYS.has(event.code) &&
         !isEditableTarget(event.target)
       ) {
@@ -770,13 +859,97 @@ function CameraRig({
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", clearKeys);
     };
-  }, [cameraMode]);
+  }, [cameraMode, experienceMode]);
+
+  useEffect(() => {
+    if (experienceMode !== "cockpit") {
+      cockpitVelocity.set(0, 0, 0);
+      pressedKeysRef.current.clear();
+      return;
+    }
+
+    cockpitRotation.setFromQuaternion(camera.quaternion, "YXZ");
+    cockpitYawRef.current = cockpitRotation.y;
+    cockpitPitchRef.current = clamp(cockpitRotation.x, -1.18, 1.18);
+  }, [camera, cockpitRotation, cockpitVelocity, experienceMode, selectedTarget]);
+
+  useEffect(() => {
+    if (experienceMode !== "cockpit") return;
+
+    const element = gl.domElement;
+    const pointerState = cockpitPointerRef.current;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (event.button !== 0) return;
+
+      event.preventDefault();
+      pointerState.dragging = true;
+      pointerState.x = event.clientX;
+      pointerState.y = event.clientY;
+      element.setPointerCapture(event.pointerId);
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+      if (!pointerState.dragging) return;
+
+      const deltaX = event.clientX - pointerState.x;
+      const deltaY = event.clientY - pointerState.y;
+      pointerState.x = event.clientX;
+      pointerState.y = event.clientY;
+      cockpitYawRef.current -= deltaX * COCKPIT_MOUSE_SENSITIVITY;
+      cockpitPitchRef.current = clamp(
+        cockpitPitchRef.current - deltaY * COCKPIT_MOUSE_SENSITIVITY,
+        -1.18,
+        1.18,
+      );
+      cockpitRotation.set(
+        cockpitPitchRef.current,
+        cockpitYawRef.current,
+        0,
+        "YXZ",
+      );
+      camera.quaternion.setFromEuler(cockpitRotation);
+    }
+
+    function handlePointerUp(event: PointerEvent) {
+      pointerState.dragging = false;
+      if (element.hasPointerCapture(event.pointerId)) {
+        element.releasePointerCapture(event.pointerId);
+      }
+    }
+
+    element.addEventListener("pointerdown", handlePointerDown);
+    element.addEventListener("pointermove", handlePointerMove);
+    element.addEventListener("pointerup", handlePointerUp);
+    element.addEventListener("pointerleave", handlePointerUp);
+
+    return () => {
+      pointerState.dragging = false;
+      element.removeEventListener("pointerdown", handlePointerDown);
+      element.removeEventListener("pointermove", handlePointerMove);
+      element.removeEventListener("pointerup", handlePointerUp);
+      element.removeEventListener("pointerleave", handlePointerUp);
+    };
+  }, [camera, cockpitRotation, experienceMode, gl.domElement]);
+
+  useEffect(() => {
+    if (experienceMode !== "cockpit" || controlMode !== "autopilot") return;
+
+    commandFlightActiveRef.current = false;
+    autoFlightActiveRef.current = false;
+    autopilotCompleteNotifiedRef.current = false;
+    lastAutopilotTargetRef.current = null;
+    cockpitVelocity.set(0, 0, 0);
+    pressedKeysRef.current.clear();
+  }, [cockpitVelocity, controlMode, experienceMode, selectedTarget]);
 
   useFrame((_, delta) => {
     const [x, y, z] = TARGET_POSITIONS[selectedTarget];
     const targetLerpFactor = 1 - Math.exp(-delta * 5.8);
     const flightLerpFactor = 1 - Math.exp(-delta * 2.4);
     const sensitivityMultiplier = SENSITIVITY_MULTIPLIERS[controlSensitivity];
+    const isCockpit = experienceMode === "cockpit";
+    const isAutopilot = isCockpit && controlMode === "autopilot";
 
     targetPlanetPosition.set(x, y, z);
     const nearestTarget = getNearestTarget(camera.position);
@@ -801,14 +974,19 @@ function CameraRig({
       lastSelectedTargetRef.current = selectedTarget;
       lastUserControlVersionRef.current = userControlVersionRef.current;
       autoFlightActiveRef.current =
-        cameraMode === "locked" && lockBehavior === "fly";
+        cameraMode === "locked" && lockBehavior === "fly" && !isCockpit;
     }
 
     if (lastCameraModeRef.current !== cameraMode) {
       lastCameraModeRef.current = cameraMode;
       lastUserControlVersionRef.current = userControlVersionRef.current;
       autoFlightActiveRef.current =
-        cameraMode === "locked" && lockBehavior === "fly";
+        cameraMode === "locked" && lockBehavior === "fly" && !isCockpit;
+    }
+
+    if (lastControlModeRef.current !== controlMode) {
+      lastControlModeRef.current = controlMode;
+      autopilotCompleteNotifiedRef.current = false;
     }
 
     if (lastUserControlVersionRef.current !== userControlVersionRef.current) {
@@ -870,14 +1048,55 @@ function CameraRig({
 
     if (commandFlightActiveRef.current) {
       camera.position.lerp(commandCameraPosition, flightLerpFactor);
+      camera.lookAt(commandTargetPosition);
+      if (isCockpit) {
+        cockpitRotation.setFromQuaternion(camera.quaternion, "YXZ");
+        cockpitYawRef.current = cockpitRotation.y;
+        cockpitPitchRef.current = clamp(cockpitRotation.x, -1.18, 1.18);
+      }
 
       if (camera.position.distanceTo(commandCameraPosition) < 0.08) {
         commandFlightActiveRef.current = false;
       }
     }
 
+    if (isAutopilot && !commandFlightActiveRef.current) {
+      targetCameraPosition
+        .copy(targetPlanetPosition)
+        .addScaledVector(CAMERA_OFFSETS[selectedTarget], getCloseCameraScale(selectedTarget));
+      if (lastAutopilotTargetRef.current !== selectedTarget) {
+        lastAutopilotTargetRef.current = selectedTarget;
+        autopilotStartDistanceRef.current = Math.max(
+          camera.position.distanceTo(targetCameraPosition),
+          0.001,
+        );
+      }
+      camera.position.lerp(targetCameraPosition, 1 - Math.exp(-delta * 3.2));
+      camera.lookAt(targetPlanetPosition);
+      cockpitRotation.setFromQuaternion(camera.quaternion, "YXZ");
+      cockpitYawRef.current = cockpitRotation.y;
+      cockpitPitchRef.current = clamp(cockpitRotation.x, -1.18, 1.18);
+      cockpitVelocity.set(0, 0, 0);
+
+      if (controlsRef.current) {
+        controlsRef.current.target.lerp(targetPlanetPosition, targetLerpFactor);
+      }
+
+      if (
+        !autopilotCompleteNotifiedRef.current &&
+        camera.position.distanceTo(targetCameraPosition) < 0.14
+      ) {
+        autopilotCompleteNotifiedRef.current = true;
+        onAutopilotComplete();
+      }
+    } else if (!isAutopilot) {
+      autopilotCompleteNotifiedRef.current = false;
+      lastAutopilotTargetRef.current = null;
+    }
+
     if (
       cameraMode === "locked" &&
+      !isCockpit &&
       autoFlightActiveRef.current &&
       !commandFlightActiveRef.current
     ) {
@@ -894,7 +1113,34 @@ function CameraRig({
     if (controlsRef.current) {
       controlsRef.current.dampingFactor = 0.055;
 
-      if (cameraMode === "locked") {
+      if (isCockpit) {
+        if (!isAutopilot && !commandFlightActiveRef.current) {
+          applyCockpitFlightDynamics({
+            accelerationVector: cockpitAcceleration,
+            camera,
+            delta,
+            forwardVector: cockpitForwardVector,
+            sensitivityMultiplier,
+            targetPosition: targetPlanetPosition,
+            upVector: cockpitUpVector,
+            velocity: cockpitVelocity,
+            pressedKeys: pressedKeysRef.current,
+            rightVector: cockpitRightVector,
+            selectedTarget,
+          });
+        }
+
+        camera.getWorldDirection(cockpitForwardVector);
+        controlsRef.current.target
+          .copy(camera.position)
+          .addScaledVector(cockpitForwardVector, 8);
+        controlsRef.current.enablePan = false;
+        controlsRef.current.maxDistance = MAX_FREE_CAMERA_DISTANCE;
+        controlsRef.current.minDistance = 0.18;
+        controlsRef.current.panSpeed = 0;
+        controlsRef.current.rotateSpeed = 0;
+        controlsRef.current.zoomSpeed = 0;
+      } else if (cameraMode === "locked") {
         const distanceToTarget = camera.position.distanceTo(targetPlanetPosition);
 
         controlsRef.current.enablePan = false;
@@ -921,7 +1167,6 @@ function CameraRig({
           pressedKeys: pressedKeysRef.current,
           rightVector: freeRightVector,
         });
-
         controlsRef.current.enablePan = true;
         controlsRef.current.maxDistance = MAX_FREE_CAMERA_DISTANCE;
         controlsRef.current.minDistance = 0.28;
@@ -936,6 +1181,77 @@ function CameraRig({
       controlsRef.current.update();
     } else {
       camera.lookAt(targetPlanetPosition);
+    }
+
+    if (isCockpit) {
+      flightTelemetryElapsedRef.current += delta;
+
+      if (flightTelemetryElapsedRef.current >= 0.1) {
+        flightTelemetryElapsedRef.current = 0;
+        const rawDistanceToTarget = camera.position.distanceTo(targetPlanetPosition);
+        const distanceToTarget = getCockpitDistanceToTarget(
+          rawDistanceToTarget,
+          selectedTarget,
+        );
+        const scanRange = getScanRange(selectedTarget);
+        const safeDistance = getSafeDistance(selectedTarget);
+        const scanInRange = distanceToTarget <= scanRange;
+        cockpitTargetDirection
+          .subVectors(targetPlanetPosition, camera.position)
+          .normalize();
+        camera.getWorldDirection(cockpitForwardVector);
+        const alignmentDot = cockpitForwardVector.dot(cockpitTargetDirection);
+        cockpitInverseQuaternion.copy(camera.quaternion).invert();
+        cockpitLocalDirection
+          .copy(cockpitTargetDirection)
+          .applyQuaternion(cockpitInverseQuaternion);
+        const targetBearingX = clamp(cockpitLocalDirection.x, -1, 1);
+        const targetBearingY = clamp(cockpitLocalDirection.y, -1, 1);
+        const scanAligned = alignmentDot > 0.955;
+        const targetCentered = alignmentDot > 0.982;
+        const approachZone = distanceToTarget <= scanRange * 1.36;
+        const proximityWarning =
+          !isRegionTarget(selectedTarget) && distanceToTarget < safeDistance;
+        const remainingAutopilotDistance = isAutopilot
+          ? camera.position.distanceTo(targetCameraPosition)
+          : 0;
+        const autopilotProgress = isAutopilot
+          ? clamp(
+              1 -
+                remainingAutopilotDistance /
+                  Math.max(autopilotStartDistanceRef.current, 0.001),
+              0,
+              1,
+            )
+          : 0;
+        const autopilotSpeed = isAutopilot
+          ? Math.max(remainingAutopilotDistance * 1.8, 8)
+          : 0;
+        const speed = isAutopilot ? autopilotSpeed : cockpitVelocity.length();
+        const throttle = isAutopilot
+          ? 1
+          : getCockpitThrottle(pressedKeysRef.current, cockpitVelocity);
+        const etaSeconds =
+          isAutopilot && speed > 0.1
+            ? Math.max(1, remainingAutopilotDistance / speed)
+            : null;
+
+        onFlightStateChange({
+          approachZone,
+          autopilotProgress,
+          distanceToTarget,
+          etaSeconds,
+          proximityWarning,
+          scanAligned,
+          scanAvailable: scanInRange && scanAligned,
+          scanInRange,
+          targetBearingX,
+          targetBearingY,
+          targetCentered,
+          speed,
+          throttle,
+        });
+      }
     }
   });
 
@@ -1032,6 +1348,102 @@ function getCloseCameraScale(target: SelectedTarget) {
   return 0.55;
 }
 
+function applyCockpitFlightDynamics({
+  accelerationVector,
+  camera,
+  delta,
+  forwardVector,
+  sensitivityMultiplier,
+  targetPosition,
+  upVector,
+  velocity,
+  pressedKeys,
+  rightVector,
+  selectedTarget,
+}: {
+  accelerationVector: Vector3;
+  camera: Camera;
+  delta: number;
+  forwardVector: Vector3;
+  sensitivityMultiplier: number;
+  targetPosition: Vector3;
+  upVector: Vector3;
+  velocity: Vector3;
+  pressedKeys: Set<string>;
+  rightVector: Vector3;
+  selectedTarget: SelectedTarget;
+}) {
+  const forwardIntent =
+    (pressedKeys.has("ArrowUp") || pressedKeys.has("KeyW") ? 1 : 0) -
+    (pressedKeys.has("ArrowDown") || pressedKeys.has("KeyS") ? 1 : 0);
+  const strafeIntent =
+    (pressedKeys.has("ArrowRight") || pressedKeys.has("KeyD") ? 1 : 0) -
+    (pressedKeys.has("ArrowLeft") || pressedKeys.has("KeyA") ? 1 : 0);
+  const verticalIntent =
+    (pressedKeys.has("KeyE") ? 1 : 0) - (pressedKeys.has("KeyQ") ? 1 : 0);
+  const braking = pressedKeys.has("Space");
+  const hasInput =
+    forwardIntent !== 0 || strafeIntent !== 0 || verticalIntent !== 0;
+
+  camera.getWorldDirection(forwardVector);
+  rightVector.crossVectors(forwardVector, camera.up).normalize();
+  accelerationVector.set(0, 0, 0);
+  accelerationVector.addScaledVector(forwardVector, forwardIntent);
+  accelerationVector.addScaledVector(rightVector, strafeIntent);
+  accelerationVector.addScaledVector(upVector, verticalIntent);
+
+  if (hasInput && !braking) {
+    const boostMultiplier =
+      pressedKeys.has("ShiftLeft") || pressedKeys.has("ShiftRight") ? 2.2 : 1;
+    accelerationVector
+      .normalize()
+      .multiplyScalar(
+        COCKPIT_ACCELERATION *
+          boostMultiplier *
+          sensitivityMultiplier *
+          delta,
+      );
+    velocity.add(accelerationVector);
+  }
+
+  const damping = braking
+    ? COCKPIT_BRAKE_DAMPING
+    : hasInput
+      ? 0.55
+      : COCKPIT_IDLE_DAMPING;
+  velocity.multiplyScalar(Math.exp(-damping * delta));
+
+  const maxSpeed =
+    COCKPIT_MAX_SPEED *
+    sensitivityMultiplier *
+    (pressedKeys.has("ShiftLeft") || pressedKeys.has("ShiftRight") ? 1.85 : 1);
+  if (velocity.length() > maxSpeed) {
+    velocity.setLength(maxSpeed);
+  }
+
+  const surfaceDistance = getCockpitDistanceToTarget(
+    camera.position.distanceTo(targetPosition),
+    selectedTarget,
+  );
+  const safeDistance = getSafeDistance(selectedTarget);
+
+  if (!isRegionTarget(selectedTarget) && surfaceDistance < safeDistance) {
+    forwardVector.subVectors(camera.position, targetPosition);
+    if (forwardVector.lengthSq() > 0.0001) {
+      forwardVector.normalize();
+      const inwardVelocity = velocity.dot(forwardVector);
+      if (inwardVelocity < 0) {
+        velocity.addScaledVector(
+          forwardVector,
+          -inwardVelocity * (1.12 + (1 - surfaceDistance / safeDistance)),
+        );
+      }
+    }
+  }
+
+  camera.position.addScaledVector(velocity, delta);
+}
+
 function applyFreeKeyboardMovement({
   camera,
   controls,
@@ -1057,14 +1469,19 @@ function applyFreeKeyboardMovement({
   const strafeIntent =
     (pressedKeys.has("ArrowRight") || pressedKeys.has("KeyD") ? 1 : 0) -
     (pressedKeys.has("ArrowLeft") || pressedKeys.has("KeyA") ? 1 : 0);
+  const verticalIntent =
+    (pressedKeys.has("KeyE") ? 1 : 0) - (pressedKeys.has("KeyQ") ? 1 : 0);
 
-  if (forwardIntent === 0 && strafeIntent === 0) return;
+  if (pressedKeys.has("Space")) return;
+
+  if (forwardIntent === 0 && strafeIntent === 0 && verticalIntent === 0) return;
 
   camera.getWorldDirection(forwardVector);
   rightVector.crossVectors(forwardVector, camera.up).normalize();
   movementVector.set(0, 0, 0);
   movementVector.addScaledVector(forwardVector, forwardIntent);
   movementVector.addScaledVector(rightVector, strafeIntent);
+  movementVector.addScaledVector(camera.up, verticalIntent);
 
   if (movementVector.lengthSq() === 0) return;
 
@@ -1082,6 +1499,33 @@ function applyFreeKeyboardMovement({
     );
   camera.position.add(movementVector);
   controls.target.add(movementVector);
+}
+
+function getCockpitThrottle(
+  pressedKeys: Set<string>,
+  velocity: Vector3,
+) {
+  if (pressedKeys.has("Space")) return 0;
+
+  const hasMovement =
+    pressedKeys.has("ArrowUp") ||
+    pressedKeys.has("ArrowDown") ||
+    pressedKeys.has("ArrowLeft") ||
+    pressedKeys.has("ArrowRight") ||
+    pressedKeys.has("KeyW") ||
+    pressedKeys.has("KeyA") ||
+    pressedKeys.has("KeyS") ||
+    pressedKeys.has("KeyD") ||
+    pressedKeys.has("KeyQ") ||
+    pressedKeys.has("KeyE");
+
+  if (!hasMovement) {
+    return clamp(velocity.length() / COCKPIT_MAX_SPEED, 0, 0.3);
+  }
+
+  return pressedKeys.has("ShiftLeft") || pressedKeys.has("ShiftRight")
+    ? 1
+    : 0.58;
 }
 
 function getMinCameraDistance(target: SelectedTarget) {
@@ -1110,6 +1554,47 @@ function getDynamicZoomSpeed(distanceToTarget: number) {
   if (distanceToTarget > 12) return 2.18;
   if (distanceToTarget > 5) return 1.95;
   return 1.68;
+}
+
+function getScanRange(target: SelectedTarget) {
+  if (target === "kuiper-belt") return 44;
+  if (target === "asteroid-belt") return 20;
+  if (target === "sun") return 8.5;
+  if (target === "jupiter" || target === "saturn") return 8.2;
+  if (target === "uranus" || target === "neptune") return 5.6;
+  if (target === "moon" || target === "mercury" || target === "pluto") return 2.2;
+  if (target === "ceres") return 2.6;
+  return 4.2;
+}
+
+function getSafeDistance(target: SelectedTarget) {
+  if (target === "kuiper-belt") return 22;
+  if (target === "asteroid-belt") return 8;
+  if (target === "sun") return 5.6;
+  if (target === "jupiter") return 3.1;
+  if (target === "saturn") return 4.8;
+  if (target === "uranus" || target === "neptune") return 1.55;
+  if (target === "earth") return 1.08;
+  if (target === "mars") return 0.88;
+  if (target === "venus") return 0.78;
+  if (target === "moon" || target === "mercury" || target === "pluto") {
+    return 0.52;
+  }
+  if (target === "ceres") return 0.62;
+  return 0.86;
+}
+
+function getCockpitDistanceToTarget(
+  rawDistanceToTarget: number,
+  target: SelectedTarget,
+) {
+  if (isRegionTarget(target)) return rawDistanceToTarget;
+
+  return Math.max(0, rawDistanceToTarget - TARGET_RADII[target]);
+}
+
+function isRegionTarget(target: SelectedTarget) {
+  return target === "asteroid-belt" || target === "kuiper-belt";
 }
 
 function clamp(value: number, min: number, max: number) {

@@ -30,7 +30,9 @@ import type {
   ArchiveMissionId,
   CameraCommandType,
   CameraMode,
+  ControlMode,
   ControlSensitivity,
+  ExperienceMode,
   ExplorationLogEntry,
   ExplorationPoint,
   HudMode,
@@ -60,8 +62,10 @@ type HudProps = {
   activePanel: ActivePanel;
   cameraMode: CameraMode;
   completedMissionIds: string[];
+  controlMode: ControlMode;
   controlSensitivity: ControlSensitivity;
   detailOpen: boolean;
+  experienceMode: ExperienceMode;
   explorationLog: ExplorationLogEntry[];
   explorationPoint: ExplorationPoint;
   hudMode: HudMode;
@@ -93,7 +97,9 @@ type HudProps = {
   onCompleteArchiveExpedition: () => void;
   onCompleteTourStop: () => void;
   onDismissWelcome: () => void;
+  onEnterCockpit: () => void;
   onExitTour: () => void;
+  onExitCockpit: () => void;
   onFocusArchiveWaypoint: () => void;
   onFocusTourStop: () => void;
   onJumpToTourStop: (stopIndex: number) => void;
@@ -157,6 +163,8 @@ const COPY = {
     celestialSphere: "Celestial Sphere",
     celestialModeMessage:
       "Celestial reference mode is active. Constellation lines show direction patterns seen from near Earth; they do not mean those stars are physically close together.",
+    cockpit: "Cockpit",
+    cockpitActive: "Cockpit mode active",
     currentTarget: "Current Target",
     currentTourHint:
       "Current tour is active. Complete a recommended stop mission first for the cleanest route log.",
@@ -170,6 +178,7 @@ const COPY = {
     hiddenHudButton: "HUD",
     hidePanel: "Hide Panel",
     expandTargets: "Show Lock Targets",
+    enterCockpit: "Enter Cockpit",
     info: "Info",
     keyboard:
       "Keyboard: WASD or arrow keys move in free mode. Shift accelerates, Option slows movement. Double-click a visible body to lock it.",
@@ -264,6 +273,7 @@ const COPY = {
     previous: "Previous",
     next: "Next",
     exitTour: "Exit Tour",
+    exitCockpit: "Exit Cockpit",
     focusStop: "Focus Current Stop",
     jumpToStop: "Jump to Stop",
     journeyProgress: "Journey Progress",
@@ -314,6 +324,8 @@ const COPY = {
     celestialSphere: "天球模式",
     celestialModeMessage:
       "已进入天球参考模式。星座线展示的是从地球附近观察到的方向图案，并不代表恒星之间真实距离相近。",
+    cockpit: "驾驶舱",
+    cockpitActive: "驾驶舱模式已启动",
     currentTarget: "当前目标",
     currentTourHint: "当前正在进行路线探索。建议先完成本站推荐任务，再记录本站完成。",
     detail: "详情",
@@ -326,6 +338,7 @@ const COPY = {
     hiddenHudButton: "HUD",
     hidePanel: "隐藏面板",
     expandTargets: "展开锁定目标",
+    enterCockpit: "进入驾驶舱",
     info: "信息",
     keyboard:
       "快捷键：自由模式下使用 WASD 或方向键移动，Shift 加速，Option 减速。双击可见天体可直接锁定。",
@@ -419,6 +432,7 @@ const COPY = {
     previous: "上一项",
     next: "下一项",
     exitTour: "退出路线",
+    exitCockpit: "退出驾驶舱",
     focusStop: "聚焦本站",
     jumpToStop: "跳转站点",
     journeyProgress: "旅程进度",
@@ -506,6 +520,7 @@ export default function Hud({
   completedMissionIds,
   controlSensitivity,
   detailOpen,
+  experienceMode,
   explorationLog,
   explorationPoint,
   hudMode,
@@ -536,7 +551,9 @@ export default function Hud({
   onCompleteMission,
   onCompleteTourStop,
   onDismissWelcome,
+  onEnterCockpit,
   onExitTour,
+  onExitCockpit,
   onFocusArchiveWaypoint,
   onFocusTourStop,
   onJumpToTourStop,
@@ -586,6 +603,7 @@ export default function Hud({
   );
   const activeTour = getTourById(activeTourId);
   const selectedArchiveMission = getArchiveMissionById(selectedArchiveMissionId);
+  const cockpitActive = experienceMode === "cockpit";
 
   function openViewPanelWithFeedback(message: string) {
     setHudMode("full");
@@ -614,6 +632,15 @@ export default function Hud({
           className="pointer-events-auto absolute right-4 top-4 border border-cyan-300/40 bg-black/55 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100 shadow-[0_0_20px_rgba(34,211,238,0.22)] backdrop-blur-md transition hover:border-cyan-200"
         >
           {copy.hiddenHudButton}
+        </button>
+        <button
+          type="button"
+          onClick={
+            experienceMode === "cockpit" ? onExitCockpit : onEnterCockpit
+          }
+          className="pointer-events-auto absolute right-4 top-16 border border-cyan-300/30 bg-black/55 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100 shadow-[0_0_20px_rgba(34,211,238,0.18)] backdrop-blur-md transition hover:border-cyan-200"
+        >
+          {experienceMode === "cockpit" ? copy.exitCockpit : copy.cockpit}
         </button>
         <Toast message={shareToast} />
       </div>
@@ -686,7 +713,7 @@ export default function Hud({
         />
       ) : null}
 
-      {hudMode === "full" ? (
+      {hudMode === "full" && !cockpitActive ? (
         <>
           <LeftPanel
             activePanel={activePanel}
@@ -743,7 +770,10 @@ export default function Hud({
           />
           <RightToolbar
             copy={copy}
+            experienceMode={experienceMode}
             language={language}
+            onEnterCockpit={onEnterCockpit}
+            onExitCockpit={onExitCockpit}
             onFullscreen={onToggleFullscreen}
             onOpenLayers={() => openViewPanelWithFeedback(copy.layersOpened)}
             onOpenRoutes={() => {
@@ -758,6 +788,7 @@ export default function Hud({
           />
           <AssistantPanel
             cameraMode={cameraMode}
+            experienceMode={experienceMode}
             activeTour={activeTour}
             activeTourStopIndex={activeTourStopIndex}
             completedMissionIds={completedMissionIds}
@@ -775,6 +806,8 @@ export default function Hud({
             onNextArchiveWaypoint={onNextArchiveWaypoint}
             onPreviousArchiveWaypoint={onPreviousArchiveWaypoint}
             onStartArchiveExpedition={onStartArchiveExpedition}
+            onEnterCockpit={onEnterCockpit}
+            onExitCockpit={onExitCockpit}
             onCompleteTourStop={onCompleteTourStop}
             onFocusTourStop={onFocusTourStop}
             onNextTourStop={onNextTourStop}
@@ -795,17 +828,40 @@ export default function Hud({
         </>
       ) : null}
 
-      <MissionTargets
-        cameraMode={cameraMode}
-        copy={copy}
-        hudMode={hudMode}
-        language={language}
-        selectedTarget={selectedTarget}
-        simMode={simMode}
-        setSelectedTarget={setSelectedTarget}
-      />
+      {hudMode === "full" && cockpitActive ? (
+        <RightToolbar
+          copy={copy}
+          experienceMode={experienceMode}
+          language={language}
+          onEnterCockpit={onEnterCockpit}
+          onExitCockpit={onExitCockpit}
+          onFullscreen={onToggleFullscreen}
+          onOpenLayers={() => openViewPanelWithFeedback(copy.layersOpened)}
+          onOpenRoutes={() => {
+            setLeftPanelCollapsed(false);
+            onOpenArchivesPanel();
+          }}
+          onOpenSettings={() => openViewPanelWithFeedback(copy.settingsOpened)}
+          onTriggerCommand={(command) => {
+            onCameraCommand(command);
+            onToast(commandToToast(command, language));
+          }}
+        />
+      ) : null}
 
-      {hudMode === "full" ? (
+      {!cockpitActive ? (
+        <MissionTargets
+          cameraMode={cameraMode}
+          copy={copy}
+          hudMode={hudMode}
+          language={language}
+          selectedTarget={selectedTarget}
+          simMode={simMode}
+          setSelectedTarget={setSelectedTarget}
+        />
+      ) : null}
+
+      {hudMode === "full" && !cockpitActive ? (
         activeTour && tourPanelOpen ? (
           <JourneyProgressBar
             activeTour={activeTour}
@@ -817,7 +873,7 @@ export default function Hud({
         ) : null
       ) : null}
 
-      {hudMode === "minimal" && activeTour ? (
+      {hudMode === "minimal" && activeTour && !cockpitActive ? (
         <MinimalJourneyStatus
           activeTour={activeTour}
           activeTourStopIndex={activeTourStopIndex}
@@ -825,26 +881,28 @@ export default function Hud({
         />
       ) : null}
 
-      {hudMode === "full" ? (
-        <BottomTimeline
-          cameraMode={cameraMode}
-          copy={copy}
-          language={language}
-          selectedTarget={selectedTarget}
-          simMode={simMode}
-          viewMode={viewMode}
-          onCycleSimMode={cycleSimMode}
-        />
-      ) : (
-        <MinimalStatus
-          cameraMode={cameraMode}
-          copy={copy}
-          language={language}
-          selectedTarget={selectedTarget}
-          simMode={simMode}
-          viewMode={viewMode}
-        />
-      )}
+      {!cockpitActive ? (
+        hudMode === "full" ? (
+          <BottomTimeline
+            cameraMode={cameraMode}
+            copy={copy}
+            language={language}
+            selectedTarget={selectedTarget}
+            simMode={simMode}
+            viewMode={viewMode}
+            onCycleSimMode={cycleSimMode}
+          />
+        ) : (
+          <MinimalStatus
+            cameraMode={cameraMode}
+            copy={copy}
+            language={language}
+            selectedTarget={selectedTarget}
+            simMode={simMode}
+            viewMode={viewMode}
+          />
+        )
+      ) : null}
 
       <Toast message={shareToast} />
     </div>
@@ -2771,7 +2829,10 @@ function ViewTab({
 
 function RightToolbar({
   copy,
+  experienceMode,
   language,
+  onEnterCockpit,
+  onExitCockpit,
   onFullscreen,
   onOpenLayers,
   onOpenRoutes,
@@ -2779,7 +2840,10 @@ function RightToolbar({
   onTriggerCommand,
 }: {
   copy: (typeof COPY)[Language];
+  experienceMode: ExperienceMode;
   language: Language;
+  onEnterCockpit: () => void;
+  onExitCockpit: () => void;
   onFullscreen: () => void;
   onOpenLayers: () => void;
   onOpenRoutes: () => void;
@@ -2792,6 +2856,11 @@ function RightToolbar({
     title: string;
   }> = [
     { label: language === "zh" ? "视图" : "View", onClick: onOpenLayers, title: "Layers" },
+    {
+      label: experienceMode === "cockpit" ? copy.exitCockpit : copy.cockpit,
+      onClick: experienceMode === "cockpit" ? onExitCockpit : onEnterCockpit,
+      title: experienceMode === "cockpit" ? copy.exitCockpit : copy.enterCockpit,
+    },
     { label: copy.routes, onClick: onOpenRoutes, title: "Mission Routes" },
     { label: copy.solarSystemOverview, onClick: () => onTriggerCommand("solarSystemOverview"), title: "Solar System Overview" },
     { label: "+", onClick: () => onTriggerCommand("zoomIn"), title: "Zoom +" },
@@ -2820,6 +2889,7 @@ function RightToolbar({
 
 function AssistantPanel({
   cameraMode,
+  experienceMode,
   activeTour,
   activeTourStopIndex,
   archiveExpeditionMode,
@@ -2836,6 +2906,8 @@ function AssistantPanel({
   onNextArchiveWaypoint,
   onPreviousArchiveWaypoint,
   onStartArchiveExpedition,
+  onEnterCockpit,
+  onExitCockpit,
   onCompleteTourStop,
   onFocusTourStop,
   onNextTourStop,
@@ -2846,6 +2918,7 @@ function AssistantPanel({
   viewMode,
 }: {
   cameraMode: CameraMode;
+  experienceMode: ExperienceMode;
   activeTour: Tour | null;
   activeTourStopIndex: number;
   archiveExpeditionMode: ArchiveExpeditionMode;
@@ -2862,6 +2935,8 @@ function AssistantPanel({
   onNextArchiveWaypoint: () => void;
   onPreviousArchiveWaypoint: () => void;
   onStartArchiveExpedition: (missionId?: ArchiveMissionId) => void;
+  onEnterCockpit: () => void;
+  onExitCockpit: () => void;
   onCompleteTourStop: () => void;
   onFocusTourStop: () => void;
   onNextTourStop: () => void;
@@ -3061,6 +3136,15 @@ function AssistantPanel({
       ) : (
         <p className="mt-3 text-sm leading-6 text-slate-300">{message}</p>
       )}
+      <button
+        type="button"
+        onClick={
+          experienceMode === "cockpit" ? onExitCockpit : onEnterCockpit
+        }
+        className="mt-4 w-full border border-cyan-300/30 bg-cyan-950/18 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100 transition hover:border-cyan-200 active:scale-[0.98]"
+      >
+        {experienceMode === "cockpit" ? copy.exitCockpit : copy.enterCockpit}
+      </button>
     </aside>
   );
 }
@@ -3639,9 +3723,15 @@ function formatLogEvent(type: ExplorationLogEntry["type"], language: Language) {
     archive_route_cleared: "ROUTE CLEARED",
     archive_route_loaded: "ROUTE LOADED",
     archive_waypoint_locked: "WAYPOINT LOCKED",
+    autopilot_complete: "AUTOPILOT COMPLETE",
+    autopilot_engaged: "AUTOPILOT ENGAGED",
+    cockpit_entered: "COCKPIT ENTERED",
+    cockpit_exited: "COCKPIT EXITED",
     mission_completed: "MISSION COMPLETE",
     mission_started: "MISSION STARTED",
     mission_step: "MISSION STEP",
+    scan_complete: "SCAN COMPLETE",
+    scan_started: "SCAN STARTED",
     target_locked: "TARGET LOCKED",
     tour_completed: "TOUR COMPLETE",
     tour_started: "TOUR STARTED",
@@ -3654,9 +3744,15 @@ function formatLogEvent(type: ExplorationLogEntry["type"], language: Language) {
     archive_route_cleared: "路线清除",
     archive_route_loaded: "路线载入",
     archive_waypoint_locked: "航点锁定",
+    autopilot_complete: "自动导航完成",
+    autopilot_engaged: "自动导航启动",
+    cockpit_entered: "驾驶舱进入",
+    cockpit_exited: "驾驶舱退出",
     mission_completed: "任务完成",
     mission_started: "任务启动",
     mission_step: "任务步骤",
+    scan_complete: "扫描完成",
+    scan_started: "扫描启动",
     target_locked: "目标锁定",
     tour_completed: "路线完成",
     tour_started: "路线启动",

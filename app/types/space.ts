@@ -24,6 +24,41 @@ export type HudMode = "full" | "minimal" | "hidden";
 
 export type CameraMode = "locked" | "free";
 
+export type ExperienceMode = "mission-control" | "cockpit";
+
+export type ControlMode = "orbit" | "free-flight" | "autopilot";
+
+export type FlightState = {
+  speed: number;
+  throttle: number;
+  distanceToTarget: number | null;
+  scanAvailable: boolean;
+  scanAligned: boolean;
+  scanInRange: boolean;
+  scanProgress: number;
+  isScanning: boolean;
+  targetBearingX: number;
+  targetBearingY: number;
+  targetCentered: boolean;
+  approachZone: boolean;
+  proximityWarning: boolean;
+  autopilotProgress: number;
+  etaSeconds: number | null;
+};
+
+export type FlightObjectiveType =
+  | "approach"
+  | "scan"
+  | "align"
+  | "fly-through";
+
+export type FlightObjectiveState = {
+  target: SpaceTarget;
+  type: FlightObjectiveType;
+  progress: number;
+  completed: boolean;
+};
+
 export type Language = "zh" | "en";
 
 export type LockBehavior = "fly" | "preserve";
@@ -218,7 +253,13 @@ export type ExplorationLogEventType =
   | "mission_started"
   | "mission_step"
   | "mission_completed"
-  | "target_locked";
+  | "target_locked"
+  | "cockpit_entered"
+  | "cockpit_exited"
+  | "autopilot_engaged"
+  | "autopilot_complete"
+  | "scan_started"
+  | "scan_complete";
 
 export type ExplorationLogEntry = {
   id: string;
