@@ -604,6 +604,7 @@ export default function Hud({
   const activeTour = getTourById(activeTourId);
   const selectedArchiveMission = getArchiveMissionById(selectedArchiveMissionId);
   const cockpitActive = experienceMode === "cockpit";
+  const cameraModeTargetLabel = cockpitActive ? targetLabel : nearestTargetLabel;
 
   function openViewPanelWithFeedback(message: string) {
     setHudMode("full");
@@ -658,7 +659,7 @@ export default function Hud({
           language={language}
           menuOpen={menuOpen}
           menuNotice={menuNotice}
-          nearestTargetLabel={nearestTargetLabel}
+          nearestTargetLabel={cameraModeTargetLabel}
           onCameraCommand={onCameraCommand}
           onMenuNotice={setMenuNotice}
           onOpenLog={() => {
@@ -684,7 +685,7 @@ export default function Hud({
           currentTargetLabel={targetLabel}
           hudMode={hudMode}
           language={language}
-          nearestTargetLabel={nearestTargetLabel}
+          nearestTargetLabel={cameraModeTargetLabel}
           onToggleCameraMode={onToggleCameraMode}
           onToggleHudMode={onToggleHudMode}
           onToggleLanguage={() => setLanguage(language === "zh" ? "en" : "zh")}

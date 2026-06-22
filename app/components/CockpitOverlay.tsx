@@ -153,6 +153,13 @@ export default function CockpitOverlay({
   return (
     <div className="pointer-events-none fixed inset-0 z-30 text-cyan-50">
       <CockpitFrame />
+      <button
+        type="button"
+        onClick={onExitCockpit}
+        className="pointer-events-auto absolute right-4 top-20 hidden border border-red-300/35 bg-black/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-red-100 shadow-[0_0_18px_rgba(248,113,113,0.16)] backdrop-blur-xl transition hover:border-red-200 max-[900px]:block"
+      >
+        {copy.exit}
+      </button>
       <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2">
         <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-cyan-100/18 shadow-[0_0_14px_rgba(103,232,249,0.28)]" />
         <div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-cyan-100/18 shadow-[0_0_14px_rgba(103,232,249,0.28)]" />
@@ -323,7 +330,8 @@ export default function CockpitOverlay({
             type="button"
             onClick={onScan}
             disabled={
-              !flightState.scanAvailable || flightState.isScanning || isScanned
+              (!flightState.scanAvailable && !isScanned) ||
+              flightState.isScanning
             }
             className="border border-cyan-300/35 bg-cyan-950/20 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-100 transition hover:border-cyan-200 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-slate-600"
           >
