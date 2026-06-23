@@ -176,6 +176,7 @@ export default function Home() {
   const activeFlightMissionRef = useRef<ActiveFlightMissionState | null>(
     activeFlightMission,
   );
+  const flightObjectiveActivatedAtRef = useRef(Date.now());
   const flightMissionProgressTickRef = useRef(Date.now());
   const activeTour = getTourById(activeTourId);
   const currentTourStop = activeTour?.stops[activeTourStopIndex] ?? null;
@@ -502,11 +503,9 @@ export default function Home() {
     setCameraMode("free");
     setLockBehavior("fly");
     recordTargetLocked(target, `${mission.id}-${objective.id}`);
-    issueCameraCommand(
-      objective.type === "route-waypoint" || objective.type === "fly-through"
-        ? "focus"
-        : "close",
-    );
+    if (objective.type !== "route-waypoint") {
+      issueCameraCommand(objective.type === "fly-through" ? "focus" : "close");
+    }
   }
 
   function startFlightMission(missionId: FlightMissionId) {
@@ -526,6 +525,7 @@ export default function Home() {
     setActiveFlightMission(initialFlightMission);
     const objectiveState = createFlightObjectiveState(mission, 0);
     activeFlightMissionRef.current = initialFlightMission;
+    flightObjectiveActivatedAtRef.current = Date.now();
     activeFlightObjectiveRef.current = objectiveState;
     setActiveFlightObjective(objectiveState);
     setSelectedTarget(firstTarget);
@@ -547,7 +547,9 @@ export default function Home() {
       ...currentLayers,
       ...(mission.recommendedLayers ?? {}),
     }));
-    issueCameraCommand("close");
+    if (firstObjective.type !== "route-waypoint") {
+      issueCameraCommand("close");
+    }
     recordTargetLocked(firstTarget, mission.id);
     addCaptainLog(
       mission.id,
@@ -644,15 +646,20 @@ export default function Home() {
       objectiveIndex: state.objectiveIndex + 1,
       objectiveProgress: 0,
     };
+    const nextObjective = mission.objectives[nextState.objectiveIndex];
     const nextObjectiveState = createFlightObjectiveState(
       mission,
       nextState.objectiveIndex,
     );
 
     activeFlightMissionRef.current = nextState;
+    flightObjectiveActivatedAtRef.current = Date.now();
     activeFlightObjectiveRef.current = nextObjectiveState;
     setActiveFlightMission(nextState);
     setActiveFlightObjective(nextObjectiveState);
+    if (nextObjective?.type === "route-waypoint") {
+      setControlMode("free-flight");
+    }
     applyFlightObjectiveTarget(mission, nextState.objectiveIndex);
     showToast(
       language === "zh"
@@ -958,6 +965,8 @@ export default function Home() {
     let progress = state.objectiveProgress;
     let shouldComplete = false;
     const now = Date.now();
+    const objectiveAgeSeconds =
+      (now - flightObjectiveActivatedAtRef.current) / 1000;
     const elapsedSeconds = Math.min(
       0.5,
       Math.max(0, (now - flightMissionProgressTickRef.current) / 1000),
@@ -1006,8 +1015,16 @@ export default function Home() {
         setActiveFlightMission(nextState);
       }
     } else if (objective.type === "route-waypoint") {
-      progress = selectedTarget === objectiveTarget ? 100 : progress;
-      shouldComplete = progress >= 100;
+      const distance = nextFlightState.distanceToTarget;
+      if (nextFlightState.approachZone || nextFlightState.scanInRange) {
+        progress = 100;
+      } else if (distance !== null) {
+        progress = Math.max(
+          progress,
+          Math.min(95, Math.max(12, (1 - distance / 48) * 100)),
+        );
+      }
+      shouldComplete = progress >= 100 && objectiveAgeSeconds >= 2.5;
     } else if (objective.type === "scan") {
       if (playerProgressRef.current.scannedTargetIds.includes(objectiveTarget)) {
         progress = 100;
