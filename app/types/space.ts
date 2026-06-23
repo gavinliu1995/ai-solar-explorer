@@ -57,9 +57,54 @@ export type FlightObjectiveState = {
   title: string;
   description: string;
   target: SpaceTarget;
-  type: FlightObjectiveType;
+  type: FlightObjectiveType | "route-waypoint";
   progress: number;
   completed: boolean;
+};
+
+export type FlightMissionId =
+  | "approach-earth-orbit"
+  | "scan-mars-frontier"
+  | "fly-through-asteroid-belt"
+  | "scan-saturn-rings"
+  | "survey-uranus-tilted-axis"
+  | "survey-neptune-atmosphere"
+  | "survey-pluto-charon"
+  | "cross-kuiper-frontier"
+  | "voyager-2-ice-giant-route";
+
+export type FlightMissionDifficulty = "easy" | "medium" | "hard";
+
+export type FlightObjective = {
+  id: string;
+  type: FlightObjectiveType | "route-waypoint";
+  title: Record<Language, string>;
+  instruction: Record<Language, string>;
+  target?: SpaceTarget;
+  requiredDistance?: number;
+  requiredAlignment?: number;
+  requiredDurationSeconds?: number;
+};
+
+export type FlightMission = {
+  id: FlightMissionId;
+  title: Record<Language, string>;
+  subtitle: Record<Language, string>;
+  description: Record<Language, string>;
+  target: SpaceTarget;
+  difficulty: FlightMissionDifficulty;
+  estimatedDuration: Record<Language, string>;
+  objectives: FlightObjective[];
+  reward: RewardGrant;
+  recommendedLayers?: Partial<ViewLayerState>;
+};
+
+export type ActiveFlightMissionState = {
+  missionId: FlightMissionId;
+  objectiveIndex: number;
+  objectiveProgress: number;
+  completedObjectiveIds: string[];
+  corridorSeconds: number;
 };
 
 export type Language = "zh" | "en";
@@ -313,6 +358,7 @@ export type RewardGrant = {
 export type PlayerProgress = {
   flightXp: number;
   researchCredits: number;
+  completedFlightMissionIds: FlightMissionId[];
   unlockedDiscoveryCardIds: DiscoveryCardId[];
   unlockedBadgeIds: MissionBadgeId[];
   captainTitles: string[];
@@ -342,6 +388,9 @@ export type ExplorationLogEventType =
   | "scan_complete"
   | "flight_objective_started"
   | "flight_objective_completed"
+  | "flight_mission_started"
+  | "flight_mission_completed"
+  | "flight_mission_cancelled"
   | "reward_granted"
   | "discovery_unlocked"
   | "badge_unlocked"

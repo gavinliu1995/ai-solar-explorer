@@ -1,6 +1,7 @@
 "use client";
 
 import { getMissionById, getMissionCopy } from "@/app/data/missions";
+import { getFlightMissionById } from "@/app/data/flightMissions";
 import {
   getDiscoveryCardById,
   getScanDiscoveryCardCopy,
@@ -11,6 +12,7 @@ import { SCAN_REWARDS } from "@/app/data/scanRewards";
 import { SPACE_OBJECTS } from "@/app/data/spaceObjects";
 import { LOCKABLE_TARGETS } from "@/app/types/space";
 import type {
+  ActiveFlightMissionState,
   ControlMode,
   FlightObjectiveState,
   FlightState,
@@ -23,6 +25,7 @@ import CockpitFrame from "./CockpitFrame";
 type CockpitOverlayProps = {
   controlMode: ControlMode;
   flightObjective: FlightObjectiveState | null;
+  flightMission: ActiveFlightMissionState | null;
   flightState: FlightState;
   language: Language;
   playerProgress: PlayerProgress;
@@ -31,6 +34,7 @@ type CockpitOverlayProps = {
   selectedTarget: SelectedTarget;
   onAcceptFlightObjective: () => void;
   onCancelAutopilot: () => void;
+  onCancelFlightMission: () => void;
   onEngageAutopilot: () => void;
   onExitCockpit: () => void;
   onFocusTarget: () => void;
@@ -56,6 +60,8 @@ const COPY = {
     focus: "Focus",
     focusKey: "F Focus",
     flightObjective: "Flight Objective",
+    flightMission: "Flight Mission",
+    flightMissionActive: "Flight Mission Active",
     objectiveComplete: "Objective Complete",
     objectiveProgress: "Objective Progress",
     acceptObjective: "Accept Objective",
@@ -109,6 +115,8 @@ const COPY = {
     focus: "聚焦",
     focusKey: "F 聚焦",
     flightObjective: "飞行目标",
+    flightMission: "飞行任务",
+    flightMissionActive: "飞行任务进行中",
     objectiveComplete: "目标完成",
     objectiveProgress: "目标进度",
     acceptObjective: "接飞行任务",
@@ -149,6 +157,7 @@ const COPY = {
 export default function CockpitOverlay({
   controlMode,
   flightObjective,
+  flightMission,
   flightState,
   language,
   playerProgress,
@@ -157,6 +166,7 @@ export default function CockpitOverlay({
   selectedTarget,
   onAcceptFlightObjective,
   onCancelAutopilot,
+  onCancelFlightMission,
   onEngageAutopilot,
   onExitCockpit,
   onFocusTarget,
@@ -166,6 +176,13 @@ export default function CockpitOverlay({
   const target = SPACE_OBJECTS[selectedTarget];
   const targetLabel = target.name[language];
   const mission = getMissionById(selectedMissionId);
+  const activeCatalogMission = getFlightMissionById(
+    flightMission?.missionId ?? null,
+  );
+  const activeCatalogObjective =
+    activeCatalogMission && flightMission
+      ? activeCatalogMission.objectives[flightMission.objectiveIndex]
+      : null;
   const missionCopy = mission ? getMissionCopy(mission, language) : null;
   const isScanned = scannedTargetIds.includes(selectedTarget);
   const scanStatus = getScanStatus({
@@ -286,10 +303,12 @@ export default function CockpitOverlay({
         <TelemetryRow
           label={copy.flightObjective}
           value={
-            flightObjective
-              ? flightObjective.completed
-                ? copy.objectiveComplete
-                : `${Math.round(objectiveProgress)}%`
+            activeCatalogMission && flightMission
+              ? `${flightMission.objectiveIndex + 1}/${activeCatalogMission.objectives.length}`
+              : flightObjective
+                ? flightObjective.completed
+                  ? copy.objectiveComplete
+                  : `${Math.round(objectiveProgress)}%`
               : "--"
           }
         />
@@ -344,7 +363,45 @@ export default function CockpitOverlay({
           </div>
         ) : null}
 
-        {flightObjective ? (
+        {activeCatalogMission && flightMission && activeCatalogObjective ? (
+          <div className="mt-4 border border-emerald-300/25 bg-emerald-950/12 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-emerald-100">
+                {copy.flightMissionActive}
+              </p>
+              <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                {flightMission.objectiveIndex + 1}/
+                {activeCatalogMission.objectives.length}
+              </p>
+            </div>
+            <p className="mt-2 text-xs font-semibold leading-5 text-slate-100">
+              {activeCatalogMission.title[language]}
+            </p>
+            <p className="mt-2 text-xs font-semibold leading-5 text-cyan-50">
+              {activeCatalogObjective.title[language]}
+            </p>
+            <p className="mt-2 text-[11px] leading-5 text-slate-500">
+              {activeCatalogObjective.instruction[language]}
+            </p>
+            <div className="mt-3 h-1 border border-white/10 bg-white/[0.03]">
+              <div
+                className="h-full bg-emerald-200 shadow-[0_0_16px_rgba(110,231,183,0.42)] transition-[width]"
+                style={{
+                  width: `${Math.round(
+                    Math.min(100, Math.max(0, flightMission.objectiveProgress)),
+                  )}%`,
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={onCancelFlightMission}
+              className="pointer-events-auto mt-3 w-full border border-red-300/25 bg-red-950/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-red-100 transition hover:border-red-200/60"
+            >
+              {copy.cancel}
+            </button>
+          </div>
+        ) : flightObjective ? (
           <div className="mt-4 border border-emerald-300/20 bg-emerald-950/10 p-3">
             <div className="flex items-center justify-between gap-3">
               <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-emerald-100">

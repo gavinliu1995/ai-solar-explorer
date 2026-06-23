@@ -22,11 +22,16 @@ import {
 } from "./data/discoveryCards";
 import { getMissionBadgeById, getMissionBadgeCopy } from "./data/missionBadges";
 import { getCaptainRank, getCaptainRankId } from "./data/playerProgress";
+import {
+  getFlightMissionById,
+  getRecommendedFlightMissionForTarget,
+} from "./data/flightMissions";
 import { SCAN_REWARDS } from "./data/scanRewards";
 import { SPACE_OBJECTS } from "./data/spaceObjects";
 import { getTourById, getTourCopy, getTourStopCopy } from "./data/tours";
 import type {
   ActivePanel,
+  ActiveFlightMissionState,
   ArchiveExpeditionMode,
   ArchiveMission,
   ArchiveMissionId,
@@ -39,6 +44,9 @@ import type {
   ExplorationLogEntry,
   ExplorationPoint,
   FlightObjectiveState,
+  FlightMission,
+  FlightMissionId,
+  FlightObjective,
   FlightState,
   HudMode,
   Language,
@@ -94,6 +102,7 @@ export default function Home() {
   });
   const [playerProgress, setPlayerProgress] = useState<PlayerProgress>({
     captainTitles: [],
+    completedFlightMissionIds: [],
     flightXp: 0,
     researchCredits: 0,
     scannedTargetIds: [],
@@ -102,6 +111,8 @@ export default function Home() {
   });
   const [activeFlightObjective, setActiveFlightObjective] =
     useState<FlightObjectiveState | null>(null);
+  const [activeFlightMission, setActiveFlightMission] =
+    useState<ActiveFlightMissionState | null>(null);
   const [language, setLanguage] = useState<Language>("zh");
   const [nearestTarget, setNearestTarget] = useState<SelectedTarget>("earth");
   const [lockBehavior, setLockBehavior] = useState<LockBehavior>("fly");
@@ -162,6 +173,10 @@ export default function Home() {
   const activeFlightObjectiveRef = useRef<FlightObjectiveState | null>(
     activeFlightObjective,
   );
+  const activeFlightMissionRef = useRef<ActiveFlightMissionState | null>(
+    activeFlightMission,
+  );
+  const flightMissionProgressTickRef = useRef(Date.now());
   const activeTour = getTourById(activeTourId);
   const currentTourStop = activeTour?.stops[activeTourStopIndex] ?? null;
   const selectedArchiveMission = getArchiveMissionById(selectedArchiveMissionId);
@@ -218,6 +233,10 @@ export default function Home() {
   useEffect(() => {
     activeFlightObjectiveRef.current = activeFlightObjective;
   }, [activeFlightObjective]);
+
+  useEffect(() => {
+    activeFlightMissionRef.current = activeFlightMission;
+  }, [activeFlightMission]);
 
   useEffect(() => {
     if (experienceMode !== "cockpit") return;
@@ -346,6 +365,7 @@ export default function Home() {
 
     if (currentProgress.scannedTargetIds.includes(target)) {
       completeFlightObjective(target);
+      completeActiveFlightMissionObjective("scan", target);
       showToast(
         language === "zh"
           ? `${SPACE_OBJECTS[target].name.zh} 已扫描，奖励不会重复发放`
@@ -445,6 +465,334 @@ export default function Home() {
       getRewardToast(target, newDiscoveryCardIds, newBadgeIds, xp, credits),
     );
     completeFlightObjective(target);
+    completeActiveFlightMissionObjective("scan", target);
+  }
+
+  function getFlightObjectiveDescription(objective: FlightObjective) {
+    return objective.instruction[language];
+  }
+
+  function createFlightObjectiveState(
+    mission: FlightMission,
+    objectiveIndex: number,
+    progress = 0,
+    completed = false,
+  ): FlightObjectiveState {
+    const objective = mission.objectives[objectiveIndex];
+    const target = objective.target ?? mission.target;
+
+    return {
+      completed,
+      description: getFlightObjectiveDescription(objective),
+      id: `${mission.id}-${objective.id}`,
+      progress,
+      target,
+      title: objective.title[language],
+      type: objective.type,
+    };
+  }
+
+  function applyFlightObjectiveTarget(mission: FlightMission, objectiveIndex: number) {
+    const objective = mission.objectives[objectiveIndex];
+    const target = objective.target ?? mission.target;
+
+    setSelectedTarget(target);
+    resetScanForTarget(target);
+    setExplorationPoint(null);
+    setCameraMode("free");
+    setLockBehavior("fly");
+    recordTargetLocked(target, `${mission.id}-${objective.id}`);
+    issueCameraCommand(
+      objective.type === "route-waypoint" || objective.type === "fly-through"
+        ? "focus"
+        : "close",
+    );
+  }
+
+  function startFlightMission(missionId: FlightMissionId) {
+    const mission = getFlightMissionById(missionId);
+    if (!mission) return;
+
+    const firstObjective = mission.objectives[0];
+    const firstTarget = firstObjective.target ?? mission.target;
+    const initialFlightMission: ActiveFlightMissionState = {
+      completedObjectiveIds: [],
+      corridorSeconds: 0,
+      missionId: mission.id,
+      objectiveIndex: 0,
+      objectiveProgress: 0,
+    };
+
+    setActiveFlightMission(initialFlightMission);
+    const objectiveState = createFlightObjectiveState(mission, 0);
+    activeFlightMissionRef.current = initialFlightMission;
+    activeFlightObjectiveRef.current = objectiveState;
+    setActiveFlightObjective(objectiveState);
+    setSelectedTarget(firstTarget);
+    resetScanForTarget(firstTarget);
+    setExplorationPoint(null);
+    setSelectedMissionId(null);
+    setMissionStepIndex(0);
+    setExperienceMode("cockpit");
+    setControlMode("free-flight");
+    setCameraMode("free");
+    setLockBehavior("fly");
+    setHudMode("minimal");
+    setActivePanel("missions");
+    setMenuOpen(false);
+    setSearchOpen(false);
+    setDetailOpen(false);
+    setWelcomeOpen(false);
+    setViewLayers((currentLayers) => ({
+      ...currentLayers,
+      ...(mission.recommendedLayers ?? {}),
+    }));
+    issueCameraCommand("close");
+    recordTargetLocked(firstTarget, mission.id);
+    addCaptainLog(
+      mission.id,
+      language === "zh"
+        ? `飞行任务启动 — ${mission.title.zh}。`
+        : `FLIGHT MISSION STARTED — ${mission.title.en}.`,
+      "flight_mission_started",
+    );
+    showToast(
+      language === "zh"
+        ? `飞行任务已启动：${mission.title.zh}`
+        : `Flight mission started: ${mission.title.en}`,
+    );
+  }
+
+  function startRecommendedFlightMission() {
+    const recommendedFlightMission =
+      getRecommendedFlightMissionForTarget(selectedTarget);
+
+    if (!recommendedFlightMission) {
+      startFlightObjective(selectedTarget);
+      return;
+    }
+
+    startFlightMission(recommendedFlightMission.id);
+  }
+
+  function cancelFlightMission() {
+    const mission = getFlightMissionById(activeFlightMissionRef.current?.missionId ?? null);
+    if (!mission) {
+      setActiveFlightMission(null);
+      setActiveFlightObjective(null);
+      activeFlightMissionRef.current = null;
+      activeFlightObjectiveRef.current = null;
+      return;
+    }
+
+    setActiveFlightMission(null);
+    setActiveFlightObjective(null);
+    activeFlightMissionRef.current = null;
+    activeFlightObjectiveRef.current = null;
+    addCaptainLog(
+      mission.id,
+      language === "zh"
+        ? `飞行任务取消 — ${mission.title.zh}。`
+        : `FLIGHT MISSION CANCELLED — ${mission.title.en}.`,
+      "flight_mission_cancelled",
+    );
+    showToast(
+      language === "zh" ? "飞行任务已取消" : "Flight mission cancelled",
+    );
+  }
+
+  function completeActiveFlightMissionObjective(
+    expectedType?: FlightObjective["type"],
+    expectedTarget?: SelectedTarget,
+  ) {
+    const state = activeFlightMissionRef.current;
+    if (!state) return;
+
+    const mission = getFlightMissionById(state.missionId);
+    if (!mission) return;
+
+    const objective = mission.objectives[state.objectiveIndex];
+    if (!objective) return;
+
+    const objectiveTarget = objective.target ?? mission.target;
+    if (expectedType && objective.type !== expectedType) return;
+    if (expectedTarget && objectiveTarget !== expectedTarget) return;
+    if (state.completedObjectiveIds.includes(objective.id)) return;
+
+    const nextCompletedObjectiveIds = [
+      ...state.completedObjectiveIds,
+      objective.id,
+    ];
+    addCaptainLog(
+      `${mission.id}-${objective.id}`,
+      language === "zh"
+        ? `目标步骤完成 — ${objective.title.zh}。`
+        : `OBJECTIVE COMPLETE — ${objective.title.en}.`,
+      "flight_objective_completed",
+    );
+
+    const finalObjective = state.objectiveIndex >= mission.objectives.length - 1;
+    if (finalObjective) {
+      completeFlightMission(mission);
+      return;
+    }
+
+    const nextState: ActiveFlightMissionState = {
+      ...state,
+      completedObjectiveIds: nextCompletedObjectiveIds,
+      corridorSeconds: 0,
+      objectiveIndex: state.objectiveIndex + 1,
+      objectiveProgress: 0,
+    };
+    const nextObjectiveState = createFlightObjectiveState(
+      mission,
+      nextState.objectiveIndex,
+    );
+
+    activeFlightMissionRef.current = nextState;
+    activeFlightObjectiveRef.current = nextObjectiveState;
+    setActiveFlightMission(nextState);
+    setActiveFlightObjective(nextObjectiveState);
+    applyFlightObjectiveTarget(mission, nextState.objectiveIndex);
+    showToast(
+      language === "zh"
+        ? `下一目标步骤：${nextObjectiveState.title}`
+        : `Next objective: ${nextObjectiveState.title}`,
+    );
+  }
+
+  function completeFlightMission(mission: FlightMission) {
+    const currentProgress = playerProgressRef.current;
+    const alreadyCompleted =
+      currentProgress.completedFlightMissionIds.includes(mission.id);
+
+    if (!alreadyCompleted) {
+      grantFlightMissionReward(mission);
+    } else {
+      showToast(
+        language === "zh"
+          ? `${mission.title.zh} 已完成，任务奖励不会重复发放`
+          : `${mission.title.en} already completed. Mission rewards are not repeated.`,
+      );
+    }
+
+    const completedObjectiveState = createFlightObjectiveState(
+      mission,
+      mission.objectives.length - 1,
+      100,
+      true,
+    );
+
+    activeFlightMissionRef.current = null;
+    activeFlightObjectiveRef.current = completedObjectiveState;
+    setActiveFlightMission(null);
+    setActiveFlightObjective(completedObjectiveState);
+    addCaptainLog(
+      mission.id,
+      language === "zh"
+        ? `飞行任务完成 — ${mission.title.zh}。`
+        : `FLIGHT MISSION COMPLETE — ${mission.title.en}.`,
+      "flight_mission_completed",
+    );
+  }
+
+  function grantFlightMissionReward(mission: FlightMission) {
+    const currentProgress = playerProgressRef.current;
+    const reward = mission.reward;
+    const xp = reward.xp ?? 0;
+    const credits = reward.researchCredits ?? 0;
+    const discoveryCardIds = reward.discoveryCardIds ?? [];
+    const badgeIds = reward.badgeIds ?? [];
+    const newDiscoveryCardIds = discoveryCardIds.filter(
+      (cardId) => !currentProgress.unlockedDiscoveryCardIds.includes(cardId),
+    );
+    const newBadgeIds = badgeIds.filter(
+      (badgeId) => !currentProgress.unlockedBadgeIds.includes(badgeId),
+    );
+    const previousRankId = getCaptainRankId(currentProgress.flightXp);
+    const nextFlightXp = currentProgress.flightXp + xp;
+    const nextRankId = getCaptainRankId(nextFlightXp);
+    const nextCaptainTitles =
+      previousRankId === nextRankId
+        ? currentProgress.captainTitles
+        : mergeUnique(currentProgress.captainTitles, [nextRankId]);
+    const nextProgress: PlayerProgress = {
+      ...currentProgress,
+      captainTitles: nextCaptainTitles,
+      completedFlightMissionIds: mergeUnique(
+        currentProgress.completedFlightMissionIds,
+        [mission.id],
+      ),
+      flightXp: nextFlightXp,
+      researchCredits: currentProgress.researchCredits + credits,
+      selectedCaptainTitle:
+        previousRankId === nextRankId
+          ? currentProgress.selectedCaptainTitle
+          : nextRankId,
+      unlockedBadgeIds: mergeUnique(
+        currentProgress.unlockedBadgeIds,
+        badgeIds,
+      ),
+      unlockedDiscoveryCardIds: mergeUnique(
+        currentProgress.unlockedDiscoveryCardIds,
+        discoveryCardIds,
+      ),
+    };
+
+    playerProgressRef.current = nextProgress;
+    setPlayerProgress(nextProgress);
+
+    newDiscoveryCardIds.forEach((cardId) => {
+      const card = getDiscoveryCardById(cardId);
+      if (!card) return;
+
+      addCaptainLog(
+        cardId,
+        language === "zh"
+          ? `发现解锁 — ${getScanDiscoveryCardCopy(card, language).title}。`
+          : `DISCOVERY UNLOCKED — ${getScanDiscoveryCardCopy(card, language).title}.`,
+        "discovery_unlocked",
+      );
+    });
+
+    if (xp > 0 || credits > 0) {
+      addCaptainLog(
+        mission.id,
+        language === "zh"
+          ? `任务奖励发放 — +${xp} XP，+${credits} 研究点数。`
+          : `MISSION REWARD GRANTED — +${xp} XP, +${credits} Research Credits.`,
+        "reward_granted",
+      );
+    }
+
+    newBadgeIds.forEach((badgeId) => {
+      const badge = getMissionBadgeById(badgeId);
+      if (!badge) return;
+
+      addCaptainLog(
+        badgeId,
+        language === "zh"
+          ? `徽章解锁 — ${getMissionBadgeCopy(badge, language).title}。`
+          : `BADGE UNLOCKED — ${getMissionBadgeCopy(badge, language).title}.`,
+        "badge_unlocked",
+      );
+    });
+
+    if (previousRankId !== nextRankId) {
+      addCaptainLog(
+        nextRankId,
+        language === "zh"
+          ? `等级更新 — ${getCaptainRank(nextFlightXp, language)}。`
+          : `RANK UPDATED — ${getCaptainRank(nextFlightXp, language)}.`,
+        "rank_updated",
+      );
+    }
+
+    showToast(
+      language === "zh"
+        ? `飞行任务完成：${mission.title.zh} · +${xp} XP · +${credits} 研究点数`
+        : `Flight mission complete: ${mission.title.en} · +${xp} XP · +${credits} Research Credits`,
+    );
   }
 
   function getFlightObjectiveCopy(target: SelectedTarget) {
@@ -542,6 +890,7 @@ export default function Home() {
   }
 
   function clearFlightObjectiveIfTargetChanges(target: SelectedTarget) {
+    if (activeFlightMissionRef.current) return;
     const objective = activeFlightObjectiveRef.current;
     if (!objective || objective.target === target) return;
 
@@ -591,6 +940,109 @@ export default function Home() {
         : 0;
 
     return Math.min(96, Math.max(scanProgress, approachProgress, alignProgress));
+  }
+
+  function updateActiveFlightMissionProgress(nextFlightState: FlightState) {
+    const state = activeFlightMissionRef.current;
+    if (!state) return;
+
+    const mission = getFlightMissionById(state.missionId);
+    if (!mission) return;
+
+    const objective = mission.objectives[state.objectiveIndex];
+    if (!objective) return;
+
+    const objectiveTarget = objective.target ?? mission.target;
+    if (objectiveTarget !== selectedTarget) return;
+
+    let progress = state.objectiveProgress;
+    let shouldComplete = false;
+    const now = Date.now();
+    const elapsedSeconds = Math.min(
+      0.5,
+      Math.max(0, (now - flightMissionProgressTickRef.current) / 1000),
+    );
+    flightMissionProgressTickRef.current = now;
+
+    if (objective.type === "approach") {
+      const requiredDistance = objective.requiredDistance ?? 8;
+      const distance = nextFlightState.distanceToTarget;
+      if (nextFlightState.scanInRange || nextFlightState.approachZone) {
+        progress = 100;
+      } else if (distance !== null) {
+        progress = Math.max(
+          progress,
+          Math.min(95, Math.max(8, (1 - distance / (requiredDistance * 4)) * 100)),
+        );
+      }
+      shouldComplete = progress >= 100;
+    } else if (objective.type === "align") {
+      progress = nextFlightState.scanAligned || nextFlightState.targetCentered
+        ? 100
+        : nextFlightState.scanInRange
+          ? Math.max(progress, 55)
+          : Math.max(progress, 20);
+      shouldComplete = progress >= 100;
+    } else if (objective.type === "fly-through") {
+      const requiredDuration = objective.requiredDurationSeconds ?? 5;
+      const insideCorridor =
+        nextFlightState.scanInRange || nextFlightState.approachZone;
+      const corridorSeconds = insideCorridor
+        ? Math.min(requiredDuration, state.corridorSeconds + elapsedSeconds)
+        : Math.max(0, state.corridorSeconds - elapsedSeconds * 0.75);
+      progress = Math.min(100, (corridorSeconds / requiredDuration) * 100);
+      shouldComplete = corridorSeconds >= requiredDuration;
+
+      if (
+        Math.abs(corridorSeconds - state.corridorSeconds) > 0.15 ||
+        shouldComplete
+      ) {
+        const nextState = {
+          ...state,
+          corridorSeconds,
+          objectiveProgress: progress,
+        };
+        activeFlightMissionRef.current = nextState;
+        setActiveFlightMission(nextState);
+      }
+    } else if (objective.type === "route-waypoint") {
+      progress = selectedTarget === objectiveTarget ? 100 : progress;
+      shouldComplete = progress >= 100;
+    } else if (objective.type === "scan") {
+      if (playerProgressRef.current.scannedTargetIds.includes(objectiveTarget)) {
+        progress = 100;
+      } else if (nextFlightState.scanAvailable) {
+        progress = Math.max(progress, 70);
+      } else if (nextFlightState.scanInRange) {
+        progress = Math.max(progress, 45);
+      } else {
+        progress = Math.max(progress, 15);
+      }
+      shouldComplete = progress >= 100;
+    }
+
+    if (shouldComplete) {
+      completeActiveFlightMissionObjective(objective.type, objectiveTarget);
+      return;
+    }
+
+    if (progress > state.objectiveProgress + 4 && objective.type !== "fly-through") {
+      const nextState = {
+        ...state,
+        objectiveProgress: progress,
+      };
+      const nextObjective = activeFlightObjectiveRef.current
+        ? {
+            ...activeFlightObjectiveRef.current,
+            progress,
+          }
+        : createFlightObjectiveState(mission, state.objectiveIndex, progress);
+
+      activeFlightMissionRef.current = nextState;
+      activeFlightObjectiveRef.current = nextObjective;
+      setActiveFlightMission(nextState);
+      setActiveFlightObjective(nextObjective);
+    }
   }
 
   function dismissWelcome() {
@@ -1300,6 +1752,7 @@ export default function Home() {
         setActiveFlightObjective(nextObjective);
       }
     }
+    updateActiveFlightMissionProgress(mergedFlightState);
 
     setFlightState((currentState) => ({
       ...currentState,
@@ -1430,6 +1883,7 @@ export default function Home() {
 
     if (playerProgressRef.current.scannedTargetIds.includes(selectedTarget)) {
       completeFlightObjective(selectedTarget);
+      completeActiveFlightMissionObjective("scan", selectedTarget);
       showToast(
         language === "zh"
           ? `${SPACE_OBJECTS[selectedTarget].name.zh} 已扫描，奖励不会重复发放`
@@ -1600,6 +2054,7 @@ export default function Home() {
         archiveExpeditionMode={archiveExpeditionMode}
         archivePanelOpen={archivePanelOpen}
         activeFlightObjective={activeFlightObjective}
+        activeFlightMission={activeFlightMission}
         playerProgress={playerProgress}
         viewLayers={viewLayers}
         viewMode={viewMode}
@@ -1610,7 +2065,8 @@ export default function Home() {
         onCompleteTourStop={handleCompleteTourStop}
         onDismissWelcome={dismissWelcome}
         onEnterCockpit={handleEnterCockpit}
-        onAcceptFlightObjective={() => startFlightObjective(selectedTarget)}
+        onAcceptFlightObjective={startRecommendedFlightMission}
+        onCancelFlightMission={cancelFlightMission}
         onExitTour={handleExitTour}
         onExitCockpit={handleExitCockpit}
         onFocusTourStop={handleFocusTourStop}
@@ -1632,6 +2088,7 @@ export default function Home() {
         onStartArchiveExpedition={handleStartArchiveExpedition}
         onViewArchiveRoute={handleViewArchiveRoute}
         onStartMission={handleStartMission}
+        onStartFlightMission={startFlightMission}
         onStartRecommendedMission={handleStartRecommendedMission}
         onStartTour={handleStartTour}
         onStartTourRecommendedMission={handleStartTourRecommendedMission}
@@ -1656,13 +2113,15 @@ export default function Home() {
           controlMode={controlMode}
           flightState={flightState}
           flightObjective={activeFlightObjective}
+          flightMission={activeFlightMission}
           language={language}
           playerProgress={playerProgress}
           scannedTargetIds={playerProgress.scannedTargetIds}
           selectedMissionId={selectedMissionId}
           selectedTarget={selectedTarget}
           onCancelAutopilot={handleCancelAutopilot}
-          onAcceptFlightObjective={() => startFlightObjective(selectedTarget)}
+          onCancelFlightMission={cancelFlightMission}
+          onAcceptFlightObjective={startRecommendedFlightMission}
           onEngageAutopilot={handleEngageAutopilot}
           onExitCockpit={handleExitCockpit}
           onFocusTarget={() => issueCameraCommand("close")}

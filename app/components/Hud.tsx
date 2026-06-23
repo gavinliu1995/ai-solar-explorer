@@ -21,6 +21,11 @@ import {
   getRecommendedMission,
 } from "@/app/data/missions";
 import {
+  FLIGHT_DIFFICULTY_LABELS,
+  FLIGHT_MISSIONS,
+  getFlightMissionById,
+} from "@/app/data/flightMissions";
+import {
   DISCOVERY_CARDS as SCAN_DISCOVERY_CARDS,
   getScanDiscoveryCardCopy,
 } from "@/app/data/discoveryCards";
@@ -30,6 +35,7 @@ import { SPACE_OBJECTS } from "@/app/data/spaceObjects";
 import { TOURS, getTourById, getTourCopy, getTourStopCopy } from "@/app/data/tours";
 import type {
   ActivePanel,
+  ActiveFlightMissionState,
   ArchiveExpeditionMode,
   ArchiveMission,
   ArchiveMissionCategory,
@@ -42,6 +48,9 @@ import type {
   ExplorationLogEntry,
   ExplorationPoint,
   FlightObjectiveState,
+  FlightMission,
+  FlightMissionDifficulty,
+  FlightMissionId,
   HudMode,
   Language,
   Mission,
@@ -69,6 +78,7 @@ import {
 type HudProps = {
   activePanel: ActivePanel;
   activeFlightObjective: FlightObjectiveState | null;
+  activeFlightMission: ActiveFlightMissionState | null;
   cameraMode: CameraMode;
   completedMissionIds: string[];
   controlMode: ControlMode;
@@ -103,6 +113,7 @@ type HudProps = {
   onAdvanceMissionStep: () => void;
   onAcceptFlightObjective: () => void;
   onCameraCommand: (command: CameraCommandType) => void;
+  onCancelFlightMission: () => void;
   onCompleteMission: (missionId: string) => void;
   onClearArchiveRoute: () => void;
   onCompleteArchiveExpedition: () => void;
@@ -126,6 +137,7 @@ type HudProps = {
   onSelectSearchTarget: (target: SelectedTarget) => void;
   onShareView: () => void;
   onStartMission: (mission: Mission) => void;
+  onStartFlightMission: (missionId: FlightMissionId) => void;
   onStartArchiveExpedition: (missionId?: ArchiveMissionId) => void;
   onStartRecommendedMission: () => void;
   onStartTour: (tourId: TourId) => void;
@@ -190,6 +202,20 @@ const COPY = {
     flightObjective: "Flight Objective",
     flightObjectiveActive: "Flight objective active",
     flightObjectiveComplete: "Flight objective complete",
+    flightMissionActive: "Flight Mission Active",
+    flightMissionCatalog: "Flight Missions",
+    flightMissionCatalogBody:
+      "Cockpit-ready flight tasks with approach, alignment, corridor, and scan objectives.",
+    flightMissionCompleted: "Flight mission complete",
+    flightMissionProgress: "Flight Mission Progress",
+    startFlightMission: "Start Flight Mission",
+    startRecommendedFlightMission: "Start Recommended Flight Mission",
+    cancelFlightMission: "Cancel Mission",
+    completedFlightMissions: "Completed Flight Missions",
+    estimatedDuration: "Duration",
+    objectiveCount: "Objectives",
+    rewardSummary: "Reward",
+    difficulty: "Difficulty",
     hiddenHudButton: "HUD",
     hidePanel: "Hide Panel",
     expandTargets: "Show Lock Targets",
@@ -372,6 +398,20 @@ const COPY = {
     flightObjective: "飞行目标",
     flightObjectiveActive: "飞行目标进行中",
     flightObjectiveComplete: "飞行目标完成",
+    flightMissionActive: "飞行任务进行中",
+    flightMissionCatalog: "飞行任务目录",
+    flightMissionCatalogBody:
+      "可在驾驶舱中执行的飞行任务，包含接近、对准、走廊穿越与扫描目标。",
+    flightMissionCompleted: "飞行任务完成",
+    flightMissionProgress: "飞行任务进度",
+    startFlightMission: "启动飞行任务",
+    startRecommendedFlightMission: "启动推荐飞行任务",
+    cancelFlightMission: "取消任务",
+    completedFlightMissions: "已完成飞行任务",
+    estimatedDuration: "耗时",
+    objectiveCount: "目标步骤",
+    rewardSummary: "奖励",
+    difficulty: "难度",
     hiddenHudButton: "HUD",
     hidePanel: "隐藏面板",
     expandTargets: "展开锁定目标",
@@ -572,6 +612,7 @@ const TARGET_SUGGESTIONS: Record<Language, Record<SelectedTarget, string>> = {
 export default function Hud({
   activePanel,
   activeFlightObjective,
+  activeFlightMission,
   cameraMode,
   completedMissionIds,
   controlSensitivity,
@@ -604,6 +645,7 @@ export default function Hud({
   onAdvanceMissionStep,
   onAcceptFlightObjective,
   onCameraCommand,
+  onCancelFlightMission,
   onClearArchiveRoute,
   onCompleteArchiveExpedition,
   onCompleteMission,
@@ -627,6 +669,7 @@ export default function Hud({
   onSelectSearchTarget,
   onShareView,
   onStartArchiveExpedition,
+  onStartFlightMission,
   onStartMission,
   onStartRecommendedMission,
   onStartTour,
@@ -776,6 +819,7 @@ export default function Hud({
         <>
           <LeftPanel
             activePanel={activePanel}
+            activeFlightMission={activeFlightMission}
             activeTour={activeTour}
             activeTourStopIndex={activeTourStopIndex}
             collapsed={leftPanelCollapsed}
@@ -800,6 +844,7 @@ export default function Hud({
             viewLayers={viewLayers}
             viewMode={viewMode}
             onAdvanceMissionStep={onAdvanceMissionStep}
+            onCancelFlightMission={onCancelFlightMission}
             onClearArchiveRoute={onClearArchiveRoute}
             onCompleteArchiveExpedition={onCompleteArchiveExpedition}
             onCompleteMission={onCompleteMission}
@@ -814,6 +859,7 @@ export default function Hud({
             onRelatedItem={onRelatedItem}
             onRestartTour={onRestartTour}
             onSelectArchiveWaypoint={onSelectArchiveWaypoint}
+            onStartFlightMission={onStartFlightMission}
             onStartMission={onStartMission}
             onStartArchiveExpedition={onStartArchiveExpedition}
             onStartTour={onStartTour}
@@ -848,6 +894,7 @@ export default function Hud({
           />
           <AssistantPanel
             activeFlightObjective={activeFlightObjective}
+            activeFlightMission={activeFlightMission}
             cameraMode={cameraMode}
             experienceMode={experienceMode}
             activeTour={activeTour}
@@ -1410,6 +1457,7 @@ function WelcomeOverlay({
 
 function LeftPanel({
   activePanel,
+  activeFlightMission,
   activeTour,
   activeTourStopIndex,
   collapsed,
@@ -1434,6 +1482,7 @@ function LeftPanel({
   viewLayers,
   viewMode,
   onAdvanceMissionStep,
+  onCancelFlightMission,
   onClearArchiveRoute,
   onCompleteArchiveExpedition,
   onCompleteMission,
@@ -1450,6 +1499,7 @@ function LeftPanel({
   onSelectArchiveWaypoint,
   onSelectTarget,
   onStartArchiveExpedition,
+  onStartFlightMission,
   onStartMission,
   onStartTour,
   onStartTourRecommendedMission,
@@ -1463,6 +1513,7 @@ function LeftPanel({
   setViewMode,
 }: {
   activePanel: ActivePanel;
+  activeFlightMission: ActiveFlightMissionState | null;
   activeTour: Tour | null;
   activeTourStopIndex: number;
   collapsed: boolean;
@@ -1487,6 +1538,7 @@ function LeftPanel({
   viewLayers: ViewLayerState;
   viewMode: ViewMode;
   onAdvanceMissionStep: () => void;
+  onCancelFlightMission: () => void;
   onClearArchiveRoute: () => void;
   onCompleteArchiveExpedition: () => void;
   onCompleteMission: (missionId: string) => void;
@@ -1503,6 +1555,7 @@ function LeftPanel({
   onSelectArchiveWaypoint: (index: number) => void;
   onSelectTarget: (target: SelectedTarget) => void;
   onStartArchiveExpedition: (missionId?: ArchiveMissionId) => void;
+  onStartFlightMission: (missionId: FlightMissionId) => void;
   onStartMission: (mission: Mission) => void;
   onStartTour: (tourId: TourId) => void;
   onStartTourRecommendedMission: () => void;
@@ -1607,16 +1660,20 @@ function LeftPanel({
           />
         ) : activePanel === "missions" ? (
           <MissionsTab
+            activeFlightMission={activeFlightMission}
             completedMissionIds={completedMissionIds}
             copy={copy}
             explorationLog={explorationLog}
             language={language}
             missionStepIndex={missionStepIndex}
+            playerProgress={playerProgress}
             recommendedMission={recommendedMission}
             selectedMissionId={selectedMissionId}
             selectedTarget={selectedTarget}
             onAdvanceMissionStep={onAdvanceMissionStep}
+            onCancelFlightMission={onCancelFlightMission}
             onCompleteMission={onCompleteMission}
+            onStartFlightMission={onStartFlightMission}
             onStartMission={onStartMission}
             tourStop={activeTour?.stops[activeTourStopIndex] ?? null}
           />
@@ -1814,34 +1871,48 @@ function InfoTab({
 }
 
 function MissionsTab({
+  activeFlightMission,
   completedMissionIds,
   copy,
   explorationLog,
   language,
   missionStepIndex,
+  playerProgress,
   recommendedMission,
   selectedMissionId,
   selectedTarget,
   tourStop,
   onAdvanceMissionStep,
+  onCancelFlightMission,
   onCompleteMission,
+  onStartFlightMission,
   onStartMission,
 }: {
+  activeFlightMission: ActiveFlightMissionState | null;
   completedMissionIds: string[];
   copy: (typeof COPY)[Language];
   explorationLog: ExplorationLogEntry[];
   language: Language;
   missionStepIndex: number;
+  playerProgress: PlayerProgress;
   recommendedMission: Mission;
   selectedMissionId: string | null;
   selectedTarget: SelectedTarget;
   tourStop: TourStop | null;
   onAdvanceMissionStep: () => void;
+  onCancelFlightMission: () => void;
   onCompleteMission: (missionId: string) => void;
+  onStartFlightMission: (missionId: FlightMissionId) => void;
   onStartMission: (mission: Mission) => void;
 }) {
   const missions = getMissionsForTarget(selectedTarget);
+  const [flightDifficultyFilter, setFlightDifficultyFilter] = useState<
+    FlightMissionDifficulty | "all"
+  >("all");
   const selectedMission = getMissionById(selectedMissionId);
+  const activeCatalogMission = getFlightMissionById(
+    activeFlightMission?.missionId ?? null,
+  );
   const selectedMissionSteps = selectedMission
     ? getMissionSteps(selectedMission, language)
     : [];
@@ -1850,6 +1921,12 @@ function MissionsTab({
     : false;
   const completedCount = completedMissionIds.length;
   const totalCount = MISSIONS.length;
+  const filteredFlightMissions =
+    flightDifficultyFilter === "all"
+      ? FLIGHT_MISSIONS
+      : FLIGHT_MISSIONS.filter(
+          (mission) => mission.difficulty === flightDifficultyFilter,
+        );
 
   return (
     <div className="grid gap-3">
@@ -1873,6 +1950,59 @@ function MissionsTab({
           {copy.currentTourHint}
         </div>
       ) : null}
+
+      {activeCatalogMission && activeFlightMission ? (
+        <ActiveFlightMissionCard
+          activeFlightMission={activeFlightMission}
+          copy={copy}
+          language={language}
+          mission={activeCatalogMission}
+          onCancelFlightMission={onCancelFlightMission}
+        />
+      ) : null}
+
+      <section className="grid gap-3 border border-cyan-300/20 bg-cyan-950/10 p-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
+            {copy.flightMissionCatalog}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-slate-400">
+            {copy.flightMissionCatalogBody}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(["all", "easy", "medium", "hard"] as const).map((difficulty) => (
+            <button
+              key={difficulty}
+              type="button"
+              onClick={() => setFlightDifficultyFilter(difficulty)}
+              className={[
+                "border px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] transition",
+                flightDifficultyFilter === difficulty
+                  ? "border-cyan-300/60 bg-cyan-950/35 text-cyan-100"
+                  : "border-white/10 bg-white/[0.03] text-slate-500 hover:border-cyan-300/35 hover:text-slate-200",
+              ].join(" ")}
+            >
+              {FLIGHT_DIFFICULTY_LABELS[difficulty][language]}
+            </button>
+          ))}
+        </div>
+        <div className="grid gap-3">
+          {filteredFlightMissions.map((flightMission) => (
+            <FlightMissionCard
+              key={flightMission.id}
+              completed={playerProgress.completedFlightMissionIds.includes(
+                flightMission.id,
+              )}
+              copy={copy}
+              language={language}
+              mission={flightMission}
+              selectedTarget={selectedTarget}
+              onStartFlightMission={onStartFlightMission}
+            />
+          ))}
+        </div>
+      </section>
 
       {selectedMission ? (
         <ActiveMissionStepCard
@@ -2023,6 +2153,155 @@ function MissionProgress({
         />
       </div>
     </div>
+  );
+}
+
+function ActiveFlightMissionCard({
+  activeFlightMission,
+  copy,
+  language,
+  mission,
+  onCancelFlightMission,
+}: {
+  activeFlightMission: ActiveFlightMissionState;
+  copy: (typeof COPY)[Language];
+  language: Language;
+  mission: FlightMission;
+  onCancelFlightMission: () => void;
+}) {
+  const objective =
+    mission.objectives[activeFlightMission.objectiveIndex] ??
+    mission.objectives[mission.objectives.length - 1];
+  const objectiveNumber = Math.min(
+    activeFlightMission.objectiveIndex + 1,
+    mission.objectives.length,
+  );
+  const objectiveCompleted =
+    objective !== undefined &&
+    activeFlightMission.completedObjectiveIds.includes(objective.id);
+  const progress = objectiveCompleted
+    ? 100
+    : Math.round(activeFlightMission.objectiveProgress);
+
+  return (
+    <article className="border border-emerald-300/30 bg-emerald-950/14 p-3 shadow-[0_0_22px_rgba(16,185,129,0.1)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-100">
+            {copy.flightMissionActive}
+          </p>
+          <h3 className="mt-2 text-sm font-semibold text-slate-100">
+            {mission.title[language]}
+          </h3>
+        </div>
+        <span className={getDifficultyClass(mission.difficulty)}>
+          {FLIGHT_DIFFICULTY_LABELS[mission.difficulty][language]}
+        </span>
+      </div>
+      {objective ? (
+        <>
+          <p className="mt-3 text-[10px] uppercase tracking-[0.16em] text-slate-500">
+            {copy.objectiveCount} {objectiveNumber}/{mission.objectives.length}
+          </p>
+          <p className="mt-2 text-xs font-semibold text-cyan-50">
+            {objective.title[language]}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-slate-400">
+            {objective.instruction[language]}
+          </p>
+          <div className="mt-3 h-1.5 border border-white/10 bg-black/40">
+            <div
+              className="h-full bg-emerald-200 shadow-[0_0_14px_rgba(110,231,183,0.35)]"
+              style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+            />
+          </div>
+        </>
+      ) : null}
+      <div className="mt-3 flex items-center justify-between gap-2 text-[10px] uppercase tracking-[0.14em]">
+        <span className="text-slate-500">
+          {copy.flightMissionProgress}: {progress}%
+        </span>
+        <button
+          type="button"
+          onClick={onCancelFlightMission}
+          className="border border-red-300/25 bg-red-950/10 px-3 py-2 font-semibold text-red-100 transition hover:border-red-200/60 active:scale-[0.98]"
+        >
+          {copy.cancelFlightMission}
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function FlightMissionCard({
+  completed,
+  copy,
+  language,
+  mission,
+  selectedTarget,
+  onStartFlightMission,
+}: {
+  completed: boolean;
+  copy: (typeof COPY)[Language];
+  language: Language;
+  mission: FlightMission;
+  selectedTarget: SelectedTarget;
+  onStartFlightMission: (missionId: FlightMissionId) => void;
+}) {
+  const isRecommended = mission.target === selectedTarget;
+  const targetName = SPACE_OBJECTS[mission.target].name[language];
+
+  return (
+    <article
+      className={[
+        "border p-3 transition",
+        isRecommended
+          ? "border-cyan-300/35 bg-cyan-950/16"
+          : "border-white/10 bg-white/[0.03]",
+      ].join(" ")}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-100">
+            {mission.title[language]}
+          </h3>
+          <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-cyan-100/70">
+            {targetName} · {mission.estimatedDuration[language]}
+          </p>
+        </div>
+        <span className={getDifficultyClass(mission.difficulty)}>
+          {FLIGHT_DIFFICULTY_LABELS[mission.difficulty][language]}
+        </span>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-slate-400">
+        {mission.description[language]}
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+        <span className="border border-white/10 bg-black/20 px-2 py-2">
+          {copy.objectiveCount}: {mission.objectives.length}
+        </span>
+        <span className="border border-white/10 bg-black/20 px-2 py-2">
+          {copy.rewardSummary}: {formatFlightMissionReward(mission, language)}
+        </span>
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <span
+          className={[
+            "text-[9px] font-semibold uppercase tracking-[0.16em]",
+            completed ? "text-emerald-200" : "text-slate-600",
+          ].join(" ")}
+        >
+          {completed ? copy.completed : copy.active}
+        </span>
+        <button
+          type="button"
+          onClick={() => onStartFlightMission(mission.id)}
+          className="border border-cyan-300/30 bg-cyan-950/20 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-100 transition hover:border-cyan-200 active:scale-[0.98]"
+        >
+          {copy.startFlightMission}
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -2792,6 +3071,10 @@ function CollectionTab({
             label={copy.discoveries}
             value={`${playerProgress.unlockedDiscoveryCardIds.length}/${SCAN_DISCOVERY_CARDS.length}`}
           />
+          <ProgressMetric
+            label={copy.completedFlightMissions}
+            value={`${playerProgress.completedFlightMissionIds.length}/${FLIGHT_MISSIONS.length}`}
+          />
         </div>
       </section>
 
@@ -2802,6 +3085,51 @@ function CollectionTab({
         <p className="mt-2 text-xs leading-5 text-slate-300">
           {copy.collectionHint}
         </p>
+      </section>
+
+      <section className="grid gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          {copy.completedFlightMissions}
+        </p>
+        {playerProgress.completedFlightMissionIds.length > 0 ? (
+          playerProgress.completedFlightMissionIds.map((missionId) => {
+            const mission = getFlightMissionById(missionId);
+            if (!mission) return null;
+
+            return (
+              <button
+                key={mission.id}
+                type="button"
+                onClick={() => onSelectTarget(mission.target)}
+                className="border border-emerald-300/22 bg-emerald-950/10 p-3 text-left transition hover:border-emerald-200/50"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100">
+                      {mission.title[language]}
+                    </p>
+                    <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-emerald-100/65">
+                      {SPACE_OBJECTS[mission.target].name[language]} ·{" "}
+                      {mission.estimatedDuration[language]}
+                    </p>
+                  </div>
+                  <span className={getDifficultyClass(mission.difficulty)}>
+                    {FLIGHT_DIFFICULTY_LABELS[mission.difficulty][language]}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-400">
+                  {formatFlightMissionReward(mission, language)}
+                </p>
+              </button>
+            );
+          })
+        ) : (
+          <div className="border border-white/10 bg-white/[0.02] p-3 text-xs leading-5 text-slate-500">
+            {language === "zh"
+              ? "完成驾驶舱飞行任务后会记录在这里。"
+              : "Completed cockpit flight missions will appear here."}
+          </div>
+        )}
       </section>
 
       <section className="grid gap-2">
@@ -2921,6 +3249,38 @@ function ProgressMetric({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-sm font-semibold text-cyan-100">{value}</p>
     </div>
   );
+}
+
+function formatFlightMissionReward(mission: FlightMission, language: Language) {
+  const xp = mission.reward.xp ?? 0;
+  const credits = mission.reward.researchCredits ?? 0;
+  const cardCount = mission.reward.discoveryCardIds?.length ?? 0;
+  const badgeCount = mission.reward.badgeIds?.length ?? 0;
+
+  if (language === "zh") {
+    return `+${xp} XP / +${credits} 研究点数 / ${cardCount} 张发现卡${
+      badgeCount > 0 ? ` / ${badgeCount} 枚徽章` : ""
+    }`;
+  }
+
+  return `+${xp} XP / +${credits} Credits / ${cardCount} card${
+    cardCount === 1 ? "" : "s"
+  }${badgeCount > 0 ? ` / ${badgeCount} badge${badgeCount === 1 ? "" : "s"}` : ""}`;
+}
+
+function getDifficultyClass(difficulty: FlightMissionDifficulty) {
+  const base =
+    "shrink-0 border px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.14em]";
+
+  if (difficulty === "easy") {
+    return `${base} border-emerald-300/35 text-emerald-100`;
+  }
+
+  if (difficulty === "medium") {
+    return `${base} border-cyan-300/35 text-cyan-100`;
+  }
+
+  return `${base} border-amber-300/35 text-amber-100`;
 }
 
 function formatRarity(
@@ -3185,6 +3545,7 @@ function RightToolbar({
 
 function AssistantPanel({
   activeFlightObjective,
+  activeFlightMission,
   cameraMode,
   experienceMode,
   activeTour,
@@ -3216,6 +3577,7 @@ function AssistantPanel({
   viewMode,
 }: {
   activeFlightObjective: FlightObjectiveState | null;
+  activeFlightMission: ActiveFlightMissionState | null;
   cameraMode: CameraMode;
   experienceMode: ExperienceMode;
   activeTour: Tour | null;
@@ -3247,6 +3609,13 @@ function AssistantPanel({
   viewMode: ViewMode;
 }) {
   const mission = getMissionById(selectedMissionId);
+  const activeCatalogMission = getFlightMissionById(
+    activeFlightMission?.missionId ?? null,
+  );
+  const activeCatalogObjective =
+    activeCatalogMission && activeFlightMission
+      ? activeCatalogMission.objectives[activeFlightMission.objectiveIndex]
+      : null;
   const currentTourStop = activeTour?.stops[activeTourStopIndex] ?? null;
   const currentArchiveWaypoint =
     selectedArchiveMission?.waypoints[currentArchiveWaypointIndex] ?? null;
@@ -3298,6 +3667,8 @@ function AssistantPanel({
               ? selectedArchiveMission.name
               : currentTourStop
               ? `${activeTourCopy?.title} ${activeTourStopIndex + 1}/${activeTour?.stops.length}`
+              : activeCatalogMission
+                ? activeCatalogMission.title[language]
               : mission
                 ? missionCopy?.title
                 : copy.aiSubtitle}
@@ -3305,7 +3676,31 @@ function AssistantPanel({
         </div>
         <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(110,231,183,0.85)]" />
       </div>
-      {selectedArchiveMission &&
+      {activeCatalogMission && activeFlightMission && activeCatalogObjective ? (
+        <div className="mt-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-100">
+            {copy.flightMissionActive}
+          </p>
+          <h3 className="mt-2 text-sm font-semibold text-slate-100">
+            {activeCatalogMission.title[language]}
+          </h3>
+          <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-slate-500">
+            {copy.objectiveCount} {activeFlightMission.objectiveIndex + 1}/
+            {activeCatalogMission.objectives.length}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            {activeCatalogObjective.instruction[language]}
+          </p>
+          <div className="mt-3 h-1 border border-white/10 bg-white/[0.03]">
+            <div
+              className="h-full bg-emerald-200 shadow-[0_0_14px_rgba(110,231,183,0.36)]"
+              style={{
+                width: `${Math.round(activeFlightMission.objectiveProgress)}%`,
+              }}
+            />
+          </div>
+        </div>
+      ) : selectedArchiveMission &&
       currentArchiveWaypoint &&
       archiveCopy &&
       currentArchiveWaypointCopy &&
@@ -3436,7 +3831,7 @@ function AssistantPanel({
       ) : (
         <p className="mt-3 text-sm leading-6 text-slate-300">{message}</p>
       )}
-      {activeFlightObjective ? (
+      {activeFlightObjective && !activeCatalogMission ? (
         <div className="mt-4 border border-emerald-300/20 bg-emerald-950/10 p-3">
           <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-emerald-100">
             {activeFlightObjective.completed
@@ -3457,13 +3852,21 @@ function AssistantPanel({
       <button
         type="button"
         onClick={onAcceptFlightObjective}
-        className="mt-4 w-full border border-emerald-300/30 bg-emerald-950/16 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-100 transition hover:border-emerald-200 active:scale-[0.98]"
+        disabled={Boolean(activeCatalogMission && activeFlightMission)}
+        className={[
+          "mt-4 w-full border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] transition active:scale-[0.98]",
+          activeCatalogMission && activeFlightMission
+            ? "cursor-not-allowed border-white/10 bg-white/[0.02] text-slate-600"
+            : "border-emerald-300/30 bg-emerald-950/16 text-emerald-100 hover:border-emerald-200",
+        ].join(" ")}
       >
-        {activeFlightObjective?.completed
+        {activeCatalogMission && activeFlightMission
+          ? copy.flightMissionActive
+          : activeFlightObjective?.completed
           ? copy.flightObjectiveComplete
           : activeFlightObjective
             ? copy.flightObjectiveActive
-            : copy.acceptFlightObjective}
+            : copy.startRecommendedFlightMission}
       </button>
       <button
         type="button"
@@ -4060,6 +4463,9 @@ function formatLogEvent(type: ExplorationLogEntry["type"], language: Language) {
     discovery_unlocked: "DISCOVERY UNLOCKED",
     flight_objective_completed: "FLIGHT OBJECTIVE COMPLETE",
     flight_objective_started: "FLIGHT OBJECTIVE STARTED",
+    flight_mission_cancelled: "FLIGHT MISSION CANCELLED",
+    flight_mission_completed: "FLIGHT MISSION COMPLETE",
+    flight_mission_started: "FLIGHT MISSION STARTED",
     mission_completed: "MISSION COMPLETE",
     mission_started: "MISSION STARTED",
     mission_step: "MISSION STEP",
@@ -4087,6 +4493,9 @@ function formatLogEvent(type: ExplorationLogEntry["type"], language: Language) {
     discovery_unlocked: "发现解锁",
     flight_objective_completed: "飞行目标完成",
     flight_objective_started: "飞行目标启动",
+    flight_mission_cancelled: "飞行任务取消",
+    flight_mission_completed: "飞行任务完成",
+    flight_mission_started: "飞行任务启动",
     mission_completed: "任务完成",
     mission_started: "任务启动",
     mission_step: "任务步骤",
