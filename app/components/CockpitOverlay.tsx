@@ -12,6 +12,7 @@ import { SPACE_OBJECTS } from "@/app/data/spaceObjects";
 import { LOCKABLE_TARGETS } from "@/app/types/space";
 import type {
   ControlMode,
+  FlightObjectiveState,
   FlightState,
   Language,
   PlayerProgress,
@@ -21,12 +22,14 @@ import CockpitFrame from "./CockpitFrame";
 
 type CockpitOverlayProps = {
   controlMode: ControlMode;
+  flightObjective: FlightObjectiveState | null;
   flightState: FlightState;
   language: Language;
   playerProgress: PlayerProgress;
   scannedTargetIds: SelectedTarget[];
   selectedMissionId: string | null;
   selectedTarget: SelectedTarget;
+  onAcceptFlightObjective: () => void;
   onCancelAutopilot: () => void;
   onEngageAutopilot: () => void;
   onExitCockpit: () => void;
@@ -52,6 +55,10 @@ const COPY = {
     exit: "Exit Cockpit",
     focus: "Focus",
     focusKey: "F Focus",
+    flightObjective: "Flight Objective",
+    objectiveComplete: "Objective Complete",
+    objectiveProgress: "Objective Progress",
+    acceptObjective: "Accept Objective",
     inRange: "In Range",
     lockedTarget: "Locked Target",
     missionCue: "Mission Cue",
@@ -101,6 +108,10 @@ const COPY = {
     exit: "退出驾驶舱",
     focus: "聚焦",
     focusKey: "F 聚焦",
+    flightObjective: "飞行目标",
+    objectiveComplete: "目标完成",
+    objectiveProgress: "目标进度",
+    acceptObjective: "接飞行任务",
     inRange: "范围内",
     lockedTarget: "锁定目标",
     missionCue: "任务提示",
@@ -137,12 +148,14 @@ const COPY = {
 
 export default function CockpitOverlay({
   controlMode,
+  flightObjective,
   flightState,
   language,
   playerProgress,
   scannedTargetIds,
   selectedMissionId,
   selectedTarget,
+  onAcceptFlightObjective,
   onCancelAutopilot,
   onEngageAutopilot,
   onExitCockpit,
@@ -187,6 +200,13 @@ export default function CockpitOverlay({
   const scanBadgeCopy = scanBadge
     ? getMissionBadgeCopy(scanBadge, language)
     : null;
+  const objectiveProgress = flightObjective
+    ? Math.max(
+        flightObjective.progress,
+        flightObjective.completed ? 100 : 0,
+        flightState.isScanning ? flightState.scanProgress : 0,
+      )
+    : 0;
 
   return (
     <div className="pointer-events-none fixed inset-0 z-30 text-cyan-50">
@@ -264,6 +284,16 @@ export default function CockpitOverlay({
           value={isScanned ? copy.scanned : copy.unrecorded}
         />
         <TelemetryRow
+          label={copy.flightObjective}
+          value={
+            flightObjective
+              ? flightObjective.completed
+                ? copy.objectiveComplete
+                : `${Math.round(objectiveProgress)}%`
+              : "--"
+          }
+        />
+        <TelemetryRow
           label={copy.rank}
           value={getCaptainRank(playerProgress.flightXp, language)}
         />
@@ -313,6 +343,41 @@ export default function CockpitOverlay({
             </div>
           </div>
         ) : null}
+
+        {flightObjective ? (
+          <div className="mt-4 border border-emerald-300/20 bg-emerald-950/10 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-emerald-100">
+                {copy.flightObjective}
+              </p>
+              <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                {flightObjective.completed
+                  ? copy.objectiveComplete
+                  : `${Math.round(objectiveProgress)}%`}
+              </p>
+            </div>
+            <p className="mt-2 text-xs font-semibold leading-5 text-slate-200">
+              {flightObjective.title}
+            </p>
+            <p className="mt-2 text-[11px] leading-5 text-slate-500">
+              {flightObjective.description}
+            </p>
+            <div className="mt-3 h-1 border border-white/10 bg-white/[0.03]">
+              <div
+                className="h-full bg-emerald-200 shadow-[0_0_16px_rgba(110,231,183,0.42)] transition-[width]"
+                style={{ width: `${Math.round(objectiveProgress)}%` }}
+              />
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onAcceptFlightObjective}
+            className="pointer-events-auto mt-4 w-full border border-emerald-300/30 bg-emerald-950/16 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100 transition hover:border-emerald-200"
+          >
+            {copy.acceptObjective}
+          </button>
+        )}
 
         {missionCopy ? (
           <div className="mt-4 border border-white/10 bg-white/[0.03] p-3">

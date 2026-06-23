@@ -41,6 +41,7 @@ import type {
   ExperienceMode,
   ExplorationLogEntry,
   ExplorationPoint,
+  FlightObjectiveState,
   HudMode,
   Language,
   Mission,
@@ -67,6 +68,7 @@ import {
 
 type HudProps = {
   activePanel: ActivePanel;
+  activeFlightObjective: FlightObjectiveState | null;
   cameraMode: CameraMode;
   completedMissionIds: string[];
   controlMode: ControlMode;
@@ -99,6 +101,7 @@ type HudProps = {
   viewMode: ViewMode;
   welcomeOpen: boolean;
   onAdvanceMissionStep: () => void;
+  onAcceptFlightObjective: () => void;
   onCameraCommand: (command: CameraCommandType) => void;
   onCompleteMission: (missionId: string) => void;
   onClearArchiveRoute: () => void;
@@ -155,6 +158,7 @@ const COPY = {
     about:
       "Argonaut is an independent educational prototype for mission-guided solar system exploration. It is not affiliated with or endorsed by NASA.",
     active: "active",
+    acceptFlightObjective: "Accept Flight Objective",
     aiSubtitle: "Guidance channel",
     aiTitle: "Mission Control",
     autoCruise: "Auto Cruise",
@@ -183,6 +187,9 @@ const COPY = {
     freeExplore: "Free Explore",
     freeInstruction:
       "Mission control: free exploration is enabled. Use mouse, trackpad, or WASD / arrow keys. Lock the nearest target when ready.",
+    flightObjective: "Flight Objective",
+    flightObjectiveActive: "Flight objective active",
+    flightObjectiveComplete: "Flight objective complete",
     hiddenHudButton: "HUD",
     hidePanel: "Hide Panel",
     expandTargets: "Show Lock Targets",
@@ -334,6 +341,7 @@ const COPY = {
     about:
       "寰宇星舟是一个独立教育原型，用于任务引导式太阳系探索，不隶属于 NASA，也不代表 NASA 背书。",
     active: "进行中",
+    acceptFlightObjective: "接飞行任务",
     aiSubtitle: "引导频道",
     aiTitle: "任务控制",
     autoCruise: "自动巡航",
@@ -361,6 +369,9 @@ const COPY = {
     freeExplore: "自由探索",
     freeInstruction:
       "任务控制：自由探索模式已启用。可使用鼠标、触控板或 WASD / 方向键移动，靠近目标后锁定最近星体。",
+    flightObjective: "飞行目标",
+    flightObjectiveActive: "飞行目标进行中",
+    flightObjectiveComplete: "飞行目标完成",
     hiddenHudButton: "HUD",
     hidePanel: "隐藏面板",
     expandTargets: "展开锁定目标",
@@ -560,6 +571,7 @@ const TARGET_SUGGESTIONS: Record<Language, Record<SelectedTarget, string>> = {
 
 export default function Hud({
   activePanel,
+  activeFlightObjective,
   cameraMode,
   completedMissionIds,
   controlSensitivity,
@@ -590,6 +602,7 @@ export default function Hud({
   viewMode,
   welcomeOpen,
   onAdvanceMissionStep,
+  onAcceptFlightObjective,
   onCameraCommand,
   onClearArchiveRoute,
   onCompleteArchiveExpedition,
@@ -834,6 +847,7 @@ export default function Hud({
             }}
           />
           <AssistantPanel
+            activeFlightObjective={activeFlightObjective}
             cameraMode={cameraMode}
             experienceMode={experienceMode}
             activeTour={activeTour}
@@ -853,6 +867,7 @@ export default function Hud({
             onNextArchiveWaypoint={onNextArchiveWaypoint}
             onPreviousArchiveWaypoint={onPreviousArchiveWaypoint}
             onStartArchiveExpedition={onStartArchiveExpedition}
+            onAcceptFlightObjective={onAcceptFlightObjective}
             onEnterCockpit={onEnterCockpit}
             onExitCockpit={onExitCockpit}
             onCompleteTourStop={onCompleteTourStop}
@@ -2878,7 +2893,7 @@ function CollectionTab({
                   {badgeCopy.title}
                 </p>
                 <span className="text-[8px] uppercase tracking-[0.14em] text-slate-500">
-                  {unlocked ? copy.unlocked : copy.lockedDiscovery}
+                  {unlocked ? copy.unlocked : copy.locked}
                 </span>
               </div>
               <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-emerald-100/65">
@@ -3169,6 +3184,7 @@ function RightToolbar({
 }
 
 function AssistantPanel({
+  activeFlightObjective,
   cameraMode,
   experienceMode,
   activeTour,
@@ -3187,6 +3203,7 @@ function AssistantPanel({
   onNextArchiveWaypoint,
   onPreviousArchiveWaypoint,
   onStartArchiveExpedition,
+  onAcceptFlightObjective,
   onEnterCockpit,
   onExitCockpit,
   onCompleteTourStop,
@@ -3198,6 +3215,7 @@ function AssistantPanel({
   tourMode,
   viewMode,
 }: {
+  activeFlightObjective: FlightObjectiveState | null;
   cameraMode: CameraMode;
   experienceMode: ExperienceMode;
   activeTour: Tour | null;
@@ -3216,6 +3234,7 @@ function AssistantPanel({
   onNextArchiveWaypoint: () => void;
   onPreviousArchiveWaypoint: () => void;
   onStartArchiveExpedition: (missionId?: ArchiveMissionId) => void;
+  onAcceptFlightObjective: () => void;
   onEnterCockpit: () => void;
   onExitCockpit: () => void;
   onCompleteTourStop: () => void;
@@ -3417,6 +3436,35 @@ function AssistantPanel({
       ) : (
         <p className="mt-3 text-sm leading-6 text-slate-300">{message}</p>
       )}
+      {activeFlightObjective ? (
+        <div className="mt-4 border border-emerald-300/20 bg-emerald-950/10 p-3">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-emerald-100">
+            {activeFlightObjective.completed
+              ? copy.flightObjectiveComplete
+              : copy.flightObjectiveActive}
+          </p>
+          <p className="mt-2 text-xs font-semibold text-slate-200">
+            {activeFlightObjective.title}
+          </p>
+          <div className="mt-3 h-1 border border-white/10 bg-white/[0.03]">
+            <div
+              className="h-full bg-emerald-200 shadow-[0_0_14px_rgba(110,231,183,0.36)]"
+              style={{ width: `${Math.round(activeFlightObjective.progress)}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        onClick={onAcceptFlightObjective}
+        className="mt-4 w-full border border-emerald-300/30 bg-emerald-950/16 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-100 transition hover:border-emerald-200 active:scale-[0.98]"
+      >
+        {activeFlightObjective?.completed
+          ? copy.flightObjectiveComplete
+          : activeFlightObjective
+            ? copy.flightObjectiveActive
+            : copy.acceptFlightObjective}
+      </button>
       <button
         type="button"
         onClick={
@@ -4010,6 +4058,8 @@ function formatLogEvent(type: ExplorationLogEntry["type"], language: Language) {
     cockpit_exited: "COCKPIT EXITED",
     badge_unlocked: "BADGE UNLOCKED",
     discovery_unlocked: "DISCOVERY UNLOCKED",
+    flight_objective_completed: "FLIGHT OBJECTIVE COMPLETE",
+    flight_objective_started: "FLIGHT OBJECTIVE STARTED",
     mission_completed: "MISSION COMPLETE",
     mission_started: "MISSION STARTED",
     mission_step: "MISSION STEP",
@@ -4035,6 +4085,8 @@ function formatLogEvent(type: ExplorationLogEntry["type"], language: Language) {
     cockpit_exited: "驾驶舱退出",
     badge_unlocked: "徽章解锁",
     discovery_unlocked: "发现解锁",
+    flight_objective_completed: "飞行目标完成",
+    flight_objective_started: "飞行目标启动",
     mission_completed: "任务完成",
     mission_started: "任务启动",
     mission_step: "任务步骤",

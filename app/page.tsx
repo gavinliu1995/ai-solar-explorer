@@ -38,6 +38,7 @@ import type {
   ExperienceMode,
   ExplorationLogEntry,
   ExplorationPoint,
+  FlightObjectiveState,
   FlightState,
   HudMode,
   Language,
@@ -99,6 +100,8 @@ export default function Home() {
     unlockedBadgeIds: [],
     unlockedDiscoveryCardIds: [],
   });
+  const [activeFlightObjective, setActiveFlightObjective] =
+    useState<FlightObjectiveState | null>(null);
   const [language, setLanguage] = useState<Language>("zh");
   const [nearestTarget, setNearestTarget] = useState<SelectedTarget>("earth");
   const [lockBehavior, setLockBehavior] = useState<LockBehavior>("fly");
@@ -156,6 +159,9 @@ export default function Home() {
   const scanIntervalRef = useRef<number | null>(null);
   const scanTimeoutRef = useRef<number | null>(null);
   const playerProgressRef = useRef<PlayerProgress>(playerProgress);
+  const activeFlightObjectiveRef = useRef<FlightObjectiveState | null>(
+    activeFlightObjective,
+  );
   const activeTour = getTourById(activeTourId);
   const currentTourStop = activeTour?.stops[activeTourStopIndex] ?? null;
   const selectedArchiveMission = getArchiveMissionById(selectedArchiveMissionId);
@@ -208,6 +214,10 @@ export default function Home() {
   useEffect(() => {
     playerProgressRef.current = playerProgress;
   }, [playerProgress]);
+
+  useEffect(() => {
+    activeFlightObjectiveRef.current = activeFlightObjective;
+  }, [activeFlightObjective]);
 
   useEffect(() => {
     if (experienceMode !== "cockpit") return;
@@ -335,6 +345,7 @@ export default function Home() {
     const currentProgress = playerProgressRef.current;
 
     if (currentProgress.scannedTargetIds.includes(target)) {
+      completeFlightObjective(target);
       showToast(
         language === "zh"
           ? `${SPACE_OBJECTS[target].name.zh} 已扫描，奖励不会重复发放`
@@ -433,6 +444,153 @@ export default function Home() {
     showToast(
       getRewardToast(target, newDiscoveryCardIds, newBadgeIds, xp, credits),
     );
+    completeFlightObjective(target);
+  }
+
+  function getFlightObjectiveCopy(target: SelectedTarget) {
+    const targetName = SPACE_OBJECTS[target].name[language];
+
+    if (language === "zh") {
+      return {
+        title: `${targetName} 扫描航段`,
+        description:
+          "自动导航至目标附近，然后手动靠近、对准扫描框并完成一次科学扫描。",
+      };
+    }
+
+    return {
+      title: `${targetName} Scan Approach`,
+      description:
+        "Autopilot near the target, then manually approach, align the reticle, and complete one science scan.",
+    };
+  }
+
+  function startFlightObjective(target: SelectedTarget = selectedTarget) {
+    const existingObjective = activeFlightObjectiveRef.current;
+    const alreadyScanned = playerProgressRef.current.scannedTargetIds.includes(target);
+    const objectiveCopy = getFlightObjectiveCopy(target);
+    const nextObjective: FlightObjectiveState =
+      existingObjective?.target === target && !existingObjective.completed
+        ? existingObjective
+        : {
+            completed: alreadyScanned,
+            description: objectiveCopy.description,
+            id: `scan-${target}`,
+            progress: alreadyScanned ? 100 : 0,
+            target,
+            title: objectiveCopy.title,
+            type: "scan",
+          };
+
+    activeFlightObjectiveRef.current = nextObjective;
+    setActiveFlightObjective(nextObjective);
+    setSelectedTarget(target);
+    resetScanForTarget(target);
+    setExperienceMode("cockpit");
+    setControlMode("free-flight");
+    setCameraMode("free");
+    setLockBehavior("fly");
+    setHudMode("minimal");
+    setMenuOpen(false);
+    setSearchOpen(false);
+    setDetailOpen(false);
+    setWelcomeOpen(false);
+    issueCameraCommand("close");
+    recordTargetLocked(target, nextObjective.id);
+
+    if (!existingObjective || existingObjective.target !== target) {
+      addCaptainLog(
+        nextObjective.id,
+        language === "zh"
+          ? `飞行目标启动 — ${objectiveCopy.title}。`
+          : `FLIGHT OBJECTIVE STARTED — ${objectiveCopy.title}.`,
+        "flight_objective_started",
+      );
+    }
+
+    showToast(
+      language === "zh"
+        ? `飞行目标已接入：${objectiveCopy.title}`
+        : `Flight objective accepted: ${objectiveCopy.title}`,
+    );
+  }
+
+  function completeFlightObjective(target: SelectedTarget) {
+    const objective = activeFlightObjectiveRef.current;
+    if (!objective || objective.target !== target || objective.completed) return;
+
+    const completedObjective: FlightObjectiveState = {
+      ...objective,
+      completed: true,
+      progress: 100,
+    };
+
+    activeFlightObjectiveRef.current = completedObjective;
+    setActiveFlightObjective(completedObjective);
+    addCaptainLog(
+      objective.id,
+      language === "zh"
+        ? `飞行目标完成 — ${objective.title}。`
+        : `FLIGHT OBJECTIVE COMPLETE — ${objective.title}.`,
+      "flight_objective_completed",
+    );
+    showToast(
+      language === "zh"
+        ? "飞行目标完成，奖励与发现已写入收藏"
+        : "Flight objective complete. Rewards and discoveries recorded.",
+    );
+  }
+
+  function clearFlightObjectiveIfTargetChanges(target: SelectedTarget) {
+    const objective = activeFlightObjectiveRef.current;
+    if (!objective || objective.target === target) return;
+
+    activeFlightObjectiveRef.current = null;
+    setActiveFlightObjective(null);
+  }
+
+  function estimateFlightObjectiveProgress(
+    objective: FlightObjectiveState,
+    nextFlightState: Pick<
+      FlightState,
+      | "approachZone"
+      | "distanceToTarget"
+      | "scanAligned"
+      | "scanAvailable"
+      | "scanInRange"
+      | "scanProgress"
+      | "targetCentered"
+    >,
+  ) {
+    if (objective.completed) return 100;
+
+    if (objective.type === "approach") {
+      return nextFlightState.approachZone ? 100 : nextFlightState.scanInRange ? 70 : 20;
+    }
+
+    if (objective.type === "align") {
+      return nextFlightState.targetCentered ? 100 : nextFlightState.scanAligned ? 70 : 25;
+    }
+
+    if (objective.type === "fly-through") {
+      return nextFlightState.approachZone ? 80 : nextFlightState.scanInRange ? 45 : 15;
+    }
+
+    const scanProgress = nextFlightState.scanProgress ?? 0;
+    const approachProgress = nextFlightState.approachZone
+      ? 35
+      : nextFlightState.scanInRange
+        ? 25
+        : nextFlightState.distanceToTarget !== null
+          ? 12
+          : 0;
+    const alignProgress = nextFlightState.scanAvailable
+      ? 70
+      : nextFlightState.scanAligned || nextFlightState.targetCentered
+        ? 55
+        : 0;
+
+    return Math.min(96, Math.max(scanProgress, approachProgress, alignProgress));
   }
 
   function dismissWelcome() {
@@ -486,6 +644,7 @@ export default function Home() {
   function applyTourStop(stop: TourStop) {
     const stopCopy = getTourStopCopy(stop, language);
 
+    clearFlightObjectiveIfTargetChanges(stop.target);
     setSelectedTarget(stop.target);
     resetScanForTarget(stop.target);
     setExplorationPoint(null);
@@ -525,6 +684,7 @@ export default function Home() {
     const waypoint = mission.waypoints[waypointIndex];
     if (!waypoint) return;
 
+    clearFlightObjectiveIfTargetChanges(waypoint.target);
     setCurrentArchiveWaypointIndex(waypointIndex);
     setSelectedTarget(waypoint.target);
     resetScanForTarget(waypoint.target);
@@ -694,6 +854,7 @@ export default function Home() {
 
   function handleSelectTarget(target: SelectedTarget) {
     setLockBehavior("fly");
+    clearFlightObjectiveIfTargetChanges(target);
     setSelectedTarget(target);
     resetScanForTarget(target);
     setExplorationPoint(null);
@@ -706,6 +867,7 @@ export default function Home() {
 
   function handleLockTarget(target: SelectedTarget) {
     setLockBehavior("preserve");
+    clearFlightObjectiveIfTargetChanges(target);
     setSelectedTarget(target);
     resetScanForTarget(target);
     setExplorationPoint(null);
@@ -745,6 +907,7 @@ export default function Home() {
     const focusTarget = mission.focusTarget ?? mission.target;
     const missionCopy = getMissionCopy(mission, language);
 
+    clearFlightObjectiveIfTargetChanges(focusTarget);
     setSelectedMissionId(mission.id);
     setMissionStepIndex(0);
     setSelectedTarget(focusTarget);
@@ -817,6 +980,7 @@ export default function Home() {
     const currentStep = steps[missionStepIndex] ?? steps[0];
 
     if (currentStep.target) {
+      clearFlightObjectiveIfTargetChanges(currentStep.target);
       setSelectedTarget(currentStep.target);
       resetScanForTarget(currentStep.target);
       recordTargetLocked(currentStep.target, mission.id);
@@ -1111,6 +1275,32 @@ export default function Home() {
       | "throttle"
     >,
   ) {
+    const mergedFlightState = {
+      ...flightState,
+      ...nextFlightState,
+    };
+    const objective = activeFlightObjectiveRef.current;
+
+    if (
+      objective &&
+      !objective.completed &&
+      objective.target === selectedTarget
+    ) {
+      const nextProgress = estimateFlightObjectiveProgress(
+        objective,
+        mergedFlightState,
+      );
+
+      if (nextProgress > objective.progress + 4) {
+        const nextObjective = {
+          ...objective,
+          progress: nextProgress,
+        };
+        activeFlightObjectiveRef.current = nextObjective;
+        setActiveFlightObjective(nextObjective);
+      }
+    }
+
     setFlightState((currentState) => ({
       ...currentState,
       ...nextFlightState,
@@ -1239,6 +1429,7 @@ export default function Home() {
     if (flightState.isScanning) return;
 
     if (playerProgressRef.current.scannedTargetIds.includes(selectedTarget)) {
+      completeFlightObjective(selectedTarget);
       showToast(
         language === "zh"
           ? `${SPACE_OBJECTS[selectedTarget].name.zh} 已扫描，奖励不会重复发放`
@@ -1315,6 +1506,7 @@ export default function Home() {
       ).find(([, label]) => label.toLowerCase() === normalizedItem);
 
     if (explorationMatch) {
+      clearFlightObjectiveIfTargetChanges("mars");
       setSelectedTarget("mars");
       resetScanForTarget("mars");
       setExplorationPoint(explorationMatch[0]);
@@ -1407,6 +1599,7 @@ export default function Home() {
         currentArchiveWaypointIndex={currentArchiveWaypointIndex}
         archiveExpeditionMode={archiveExpeditionMode}
         archivePanelOpen={archivePanelOpen}
+        activeFlightObjective={activeFlightObjective}
         playerProgress={playerProgress}
         viewLayers={viewLayers}
         viewMode={viewMode}
@@ -1417,6 +1610,7 @@ export default function Home() {
         onCompleteTourStop={handleCompleteTourStop}
         onDismissWelcome={dismissWelcome}
         onEnterCockpit={handleEnterCockpit}
+        onAcceptFlightObjective={() => startFlightObjective(selectedTarget)}
         onExitTour={handleExitTour}
         onExitCockpit={handleExitCockpit}
         onFocusTourStop={handleFocusTourStop}
@@ -1461,12 +1655,14 @@ export default function Home() {
         <CockpitOverlay
           controlMode={controlMode}
           flightState={flightState}
+          flightObjective={activeFlightObjective}
           language={language}
           playerProgress={playerProgress}
           scannedTargetIds={playerProgress.scannedTargetIds}
           selectedMissionId={selectedMissionId}
           selectedTarget={selectedTarget}
           onCancelAutopilot={handleCancelAutopilot}
+          onAcceptFlightObjective={() => startFlightObjective(selectedTarget)}
           onEngageAutopilot={handleEngageAutopilot}
           onExitCockpit={handleExitCockpit}
           onFocusTarget={() => issueCameraCommand("close")}

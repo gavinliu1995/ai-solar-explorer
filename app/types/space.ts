@@ -53,6 +53,9 @@ export type FlightObjectiveType =
   | "fly-through";
 
 export type FlightObjectiveState = {
+  id: string;
+  title: string;
+  description: string;
   target: SpaceTarget;
   type: FlightObjectiveType;
   progress: number;
@@ -337,6 +340,8 @@ export type ExplorationLogEventType =
   | "autopilot_complete"
   | "scan_started"
   | "scan_complete"
+  | "flight_objective_started"
+  | "flight_objective_completed"
   | "reward_granted"
   | "discovery_unlocked"
   | "badge_unlocked"
