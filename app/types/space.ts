@@ -355,15 +355,77 @@ export type RewardGrant = {
   captainTitle?: string;
 };
 
+export type CaptainTitleId =
+  | "earth-observer"
+  | "mars-field-surveyor"
+  | "ring-analyst"
+  | "ice-giant-surveyor"
+  | "outer-frontier-pilot"
+  | "voyager-route-observer"
+  | "argonaut-commander";
+
 export type PlayerProgress = {
+  saveVersion: number;
+  lastSavedAt?: string;
   flightXp: number;
   researchCredits: number;
   completedFlightMissionIds: FlightMissionId[];
   unlockedDiscoveryCardIds: DiscoveryCardId[];
   unlockedBadgeIds: MissionBadgeId[];
-  captainTitles: string[];
-  selectedCaptainTitle?: string;
+  captainTitles: CaptainTitleId[];
+  selectedCaptainTitle?: CaptainTitleId;
   scannedTargetIds: SpaceTarget[];
+};
+
+export type CareerChapterId =
+  | "cadet-training"
+  | "inner-worlds"
+  | "belt-crossing"
+  | "giant-planets"
+  | "outer-frontier"
+  | "voyager-legacy";
+
+export type CareerChapter = {
+  id: CareerChapterId;
+  title: Record<Language, string>;
+  subtitle: Record<Language, string>;
+  description: Record<Language, string>;
+  requiredMissionIds: FlightMissionId[];
+  unlockRequirement?: {
+    minXp?: number;
+    completedMissionIds?: FlightMissionId[];
+    scannedTargets?: SpaceTarget[];
+  };
+};
+
+export type ShipSystemId =
+  | "basic-scanner"
+  | "precision-reticle"
+  | "deep-space-autopilot"
+  | "ring-analyzer"
+  | "ice-giant-sensor"
+  | "frontier-navigation";
+
+export type ShipSystem = {
+  id: ShipSystemId;
+  title: Record<Language, string>;
+  subtitle: Record<Language, string>;
+  description: Record<Language, string>;
+  unlockRequirement: {
+    minXp?: number;
+    badgeIds?: MissionBadgeId[];
+    completedMissionIds?: FlightMissionId[];
+  };
+};
+
+export type MissionCompleteSummary = {
+  missionId: FlightMissionId;
+  xp: number;
+  researchCredits: number;
+  discoveryCardIds: DiscoveryCardId[];
+  badgeIds: MissionBadgeId[];
+  captainTitleIds: CaptainTitleId[];
+  nextMissionId: FlightMissionId | null;
 };
 
 export type ExplorationLogEventType =
@@ -394,7 +456,8 @@ export type ExplorationLogEventType =
   | "reward_granted"
   | "discovery_unlocked"
   | "badge_unlocked"
-  | "rank_updated";
+  | "rank_updated"
+  | "captain_title_unlocked";
 
 export type ExplorationLogEntry = {
   id: string;

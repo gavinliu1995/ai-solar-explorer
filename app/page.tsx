@@ -23,9 +23,22 @@ import {
 import { getMissionBadgeById, getMissionBadgeCopy } from "./data/missionBadges";
 import { getCaptainRank, getCaptainRankId } from "./data/playerProgress";
 import {
+  getRecommendedNextFlightMission,
+} from "./data/expeditionCareer";
+import {
   getFlightMissionById,
   getRecommendedFlightMissionForTarget,
 } from "./data/flightMissions";
+import {
+  createDefaultPlayerProgress,
+  loadPlayerProgress,
+  resetPlayerProgress,
+  savePlayerProgress,
+} from "./data/localSave";
+import {
+  getCaptainTitleById,
+  getUnlockedCaptainTitleIds,
+} from "./data/captainTitles";
 import { SCAN_REWARDS } from "./data/scanRewards";
 import { SPACE_OBJECTS } from "./data/spaceObjects";
 import { getTourById, getTourCopy, getTourStopCopy } from "./data/tours";
@@ -38,6 +51,7 @@ import type {
   CameraCommand,
   CameraCommandType,
   CameraMode,
+  CaptainTitleId,
   ControlMode,
   ControlSensitivity,
   ExperienceMode,
@@ -53,6 +67,7 @@ import type {
   LockBehavior,
   Mission,
   MissionBadgeId,
+  MissionCompleteSummary,
   MissionWaypoint,
   MarsExplorationPoint,
   DiscoveryCardId,
@@ -101,14 +116,10 @@ export default function Home() {
     throttle: 0,
   });
   const [playerProgress, setPlayerProgress] = useState<PlayerProgress>({
-    captainTitles: [],
-    completedFlightMissionIds: [],
-    flightXp: 0,
-    researchCredits: 0,
-    scannedTargetIds: [],
-    unlockedBadgeIds: [],
-    unlockedDiscoveryCardIds: [],
+    ...createDefaultPlayerProgress(),
   });
+  const [missionCompleteSummary, setMissionCompleteSummary] =
+    useState<MissionCompleteSummary | null>(null);
   const [activeFlightObjective, setActiveFlightObjective] =
     useState<FlightObjectiveState | null>(null);
   const [activeFlightMission, setActiveFlightMission] =
@@ -204,6 +215,16 @@ export default function Home() {
       const timeout = window.setTimeout(() => setWelcomeOpen(false), 0);
       return () => window.clearTimeout(timeout);
     }
+  }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const savedProgress = loadPlayerProgress();
+      playerProgressRef.current = savedProgress;
+      setPlayerProgress(savedProgress);
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, []);
 
   useEffect(() => {
@@ -317,6 +338,27 @@ export default function Home() {
     return Array.from(new Set([...currentItems, ...nextItems]));
   }
 
+  function commitPlayerProgress(nextProgress: PlayerProgress) {
+    const savedProgress = savePlayerProgress(nextProgress);
+    playerProgressRef.current = savedProgress;
+    setPlayerProgress(savedProgress);
+    return savedProgress;
+  }
+
+  function addCaptainTitleLogs(titleIds: CaptainTitleId[]) {
+    titleIds.forEach((titleId) => {
+      const title = getCaptainTitleById(titleId);
+      const titleLabel = title?.label[language] ?? titleId;
+      addCaptainLog(
+        titleId,
+        language === "zh"
+          ? `称号解锁 — ${titleLabel}。`
+          : `CAPTAIN TITLE UNLOCKED — ${titleLabel}.`,
+        "captain_title_unlocked",
+      );
+    });
+  }
+
   function getRewardToast(
     target: SelectedTarget,
     cardIds: DiscoveryCardId[],
@@ -389,20 +431,11 @@ export default function Home() {
     const previousRankId = getCaptainRankId(currentProgress.flightXp);
     const nextFlightXp = currentProgress.flightXp + xp;
     const nextRankId = getCaptainRankId(nextFlightXp);
-    const nextCaptainTitles =
-      previousRankId === nextRankId
-        ? currentProgress.captainTitles
-        : mergeUnique(currentProgress.captainTitles, [nextRankId]);
-    const nextProgress: PlayerProgress = {
+    const candidateProgress: PlayerProgress = {
       ...currentProgress,
-      captainTitles: nextCaptainTitles,
       flightXp: nextFlightXp,
       researchCredits: currentProgress.researchCredits + credits,
       scannedTargetIds: [...currentProgress.scannedTargetIds, target],
-      selectedCaptainTitle:
-        previousRankId === nextRankId
-          ? currentProgress.selectedCaptainTitle
-          : nextRankId,
       unlockedBadgeIds: mergeUnique(
         currentProgress.unlockedBadgeIds,
         badgeIds,
@@ -412,9 +445,21 @@ export default function Home() {
         discoveryCardIds,
       ),
     };
+    const newCaptainTitleIds = getUnlockedCaptainTitleIds(
+      candidateProgress,
+    ).filter((titleId) => !currentProgress.captainTitles.includes(titleId));
+    const nextCaptainTitles = mergeUnique(
+      currentProgress.captainTitles,
+      newCaptainTitleIds,
+    );
+    const nextProgress: PlayerProgress = {
+      ...candidateProgress,
+      captainTitles: nextCaptainTitles,
+      selectedCaptainTitle:
+        currentProgress.selectedCaptainTitle ?? nextCaptainTitles[0],
+    };
 
-    playerProgressRef.current = nextProgress;
-    setPlayerProgress(nextProgress);
+    commitPlayerProgress(nextProgress);
 
     newDiscoveryCardIds.forEach((cardId) => {
       const card = getDiscoveryCardById(cardId);
@@ -461,6 +506,7 @@ export default function Home() {
         "rank_updated",
       );
     }
+    addCaptainTitleLogs(newCaptainTitleIds);
 
     showToast(
       getRewardToast(target, newDiscoveryCardIds, newBadgeIds, xp, credits),
@@ -543,6 +589,7 @@ export default function Home() {
     setSearchOpen(false);
     setDetailOpen(false);
     setWelcomeOpen(false);
+    setMissionCompleteSummary(null);
     setViewLayers((currentLayers) => ({
       ...currentLayers,
       ...(mission.recommendedLayers ?? {}),
@@ -719,23 +766,14 @@ export default function Home() {
     const previousRankId = getCaptainRankId(currentProgress.flightXp);
     const nextFlightXp = currentProgress.flightXp + xp;
     const nextRankId = getCaptainRankId(nextFlightXp);
-    const nextCaptainTitles =
-      previousRankId === nextRankId
-        ? currentProgress.captainTitles
-        : mergeUnique(currentProgress.captainTitles, [nextRankId]);
-    const nextProgress: PlayerProgress = {
+    const candidateProgress: PlayerProgress = {
       ...currentProgress,
-      captainTitles: nextCaptainTitles,
       completedFlightMissionIds: mergeUnique(
         currentProgress.completedFlightMissionIds,
         [mission.id],
       ),
       flightXp: nextFlightXp,
       researchCredits: currentProgress.researchCredits + credits,
-      selectedCaptainTitle:
-        previousRankId === nextRankId
-          ? currentProgress.selectedCaptainTitle
-          : nextRankId,
       unlockedBadgeIds: mergeUnique(
         currentProgress.unlockedBadgeIds,
         badgeIds,
@@ -745,9 +783,34 @@ export default function Home() {
         discoveryCardIds,
       ),
     };
+    const newCaptainTitleIds = getUnlockedCaptainTitleIds(
+      candidateProgress,
+    ).filter((titleId) => !currentProgress.captainTitles.includes(titleId));
+    const nextCaptainTitles = mergeUnique(
+      currentProgress.captainTitles,
+      newCaptainTitleIds,
+    );
+    const nextProgress: PlayerProgress = {
+      ...candidateProgress,
+      captainTitles: nextCaptainTitles,
+      selectedCaptainTitle:
+        currentProgress.selectedCaptainTitle ?? nextCaptainTitles[0],
+    };
 
-    playerProgressRef.current = nextProgress;
-    setPlayerProgress(nextProgress);
+    const savedProgress = commitPlayerProgress(nextProgress);
+    const nextMission = getRecommendedNextFlightMission(
+      savedProgress,
+      selectedTarget,
+    );
+    setMissionCompleteSummary({
+      badgeIds: newBadgeIds,
+      captainTitleIds: newCaptainTitleIds,
+      discoveryCardIds,
+      missionId: mission.id,
+      nextMissionId: nextMission?.id ?? null,
+      researchCredits: credits,
+      xp,
+    });
 
     newDiscoveryCardIds.forEach((cardId) => {
       const card = getDiscoveryCardById(cardId);
@@ -794,6 +857,7 @@ export default function Home() {
         "rank_updated",
       );
     }
+    addCaptainTitleLogs(newCaptainTitleIds);
 
     showToast(
       language === "zh"
@@ -1708,6 +1772,68 @@ export default function Home() {
     setActivePanel("view");
   }
 
+  function handleOpenCollectionPanel() {
+    setHudMode("full");
+    setExperienceMode("mission-control");
+    setControlMode("orbit");
+    setCameraMode("locked");
+    setActivePanel("collection");
+    setMissionCompleteSummary(null);
+  }
+
+  function handleContinueFreeFlight() {
+    setMissionCompleteSummary(null);
+  }
+
+  function handleStartNextRecommendedFlightMission() {
+    const missionId =
+      missionCompleteSummary?.nextMissionId ??
+      getRecommendedNextFlightMission(playerProgressRef.current, selectedTarget)
+        ?.id;
+    if (!missionId) {
+      showToast(
+        language === "zh"
+          ? "核心飞行任务已全部完成"
+          : "All core flight missions complete",
+      );
+      return;
+    }
+
+    setMissionCompleteSummary(null);
+    startFlightMission(missionId);
+  }
+
+  function handleSelectCaptainTitle(titleId: CaptainTitleId) {
+    if (!playerProgressRef.current.captainTitles.includes(titleId)) return;
+    const nextProgress: PlayerProgress = {
+      ...playerProgressRef.current,
+      selectedCaptainTitle: titleId,
+    };
+    commitPlayerProgress(nextProgress);
+    const title = getCaptainTitleById(titleId);
+    showToast(
+      language === "zh"
+        ? `已选择称号：${title?.label.zh ?? titleId}`
+        : `Captain title selected: ${title?.label.en ?? titleId}`,
+    );
+  }
+
+  function handleResetPlayerProgress() {
+    const confirmed = window.confirm(
+      language === "zh"
+        ? "确认重置本地进度？已解锁发现、徽章、称号和完成任务都会清空。"
+        : "Reset local progress? Discoveries, badges, titles, and completed missions will be cleared.",
+    );
+
+    if (!confirmed) return;
+
+    const nextProgress = resetPlayerProgress();
+    playerProgressRef.current = nextProgress;
+    setPlayerProgress(nextProgress);
+    setMissionCompleteSummary(null);
+    showToast(language === "zh" ? "本地进度已重置" : "Local progress reset");
+  }
+
   async function handleToggleFullscreen() {
     try {
       if (document.fullscreenElement) {
@@ -2072,6 +2198,7 @@ export default function Home() {
         archivePanelOpen={archivePanelOpen}
         activeFlightObjective={activeFlightObjective}
         activeFlightMission={activeFlightMission}
+        missionCompleteSummary={missionCompleteSummary}
         playerProgress={playerProgress}
         viewLayers={viewLayers}
         viewMode={viewMode}
@@ -2095,6 +2222,7 @@ export default function Home() {
         onNextArchiveWaypoint={handleNextArchiveWaypoint}
         onOpenViewPanel={handleOpenViewPanel}
         onOpenArchivesPanel={handleOpenArchivesPanel}
+        onOpenCollectionPanel={handleOpenCollectionPanel}
         onPreviousArchiveWaypoint={handlePreviousArchiveWaypoint}
         onRelatedItem={handleRelatedItem}
         onRestartTour={handleRestartTour}
@@ -2106,6 +2234,9 @@ export default function Home() {
         onViewArchiveRoute={handleViewArchiveRoute}
         onStartMission={handleStartMission}
         onStartFlightMission={startFlightMission}
+        onStartNextRecommendedFlightMission={
+          handleStartNextRecommendedFlightMission
+        }
         onStartRecommendedMission={handleStartRecommendedMission}
         onStartTour={handleStartTour}
         onStartTourRecommendedMission={handleStartTourRecommendedMission}
@@ -2113,6 +2244,9 @@ export default function Home() {
         onToggleCameraMode={handleToggleCameraMode}
         onToggleFullscreen={handleToggleFullscreen}
         onToggleHudMode={handleToggleHudMode}
+        onContinueFreeFlight={handleContinueFreeFlight}
+        onResetPlayerProgress={handleResetPlayerProgress}
+        onSelectCaptainTitle={handleSelectCaptainTitle}
         setActivePanel={setActivePanel}
         setControlSensitivity={setControlSensitivity}
         setDetailOpen={setDetailOpen}

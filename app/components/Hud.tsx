@@ -26,11 +26,28 @@ import {
   getFlightMissionById,
 } from "@/app/data/flightMissions";
 import {
+  CAREER_CHAPTERS,
+  getCareerChapterProgress,
+  getCurrentCareerChapter,
+  getRecommendedNextFlightMission,
+  isCareerChapterUnlocked,
+} from "@/app/data/expeditionCareer";
+import {
   DISCOVERY_CARDS as SCAN_DISCOVERY_CARDS,
   getScanDiscoveryCardCopy,
 } from "@/app/data/discoveryCards";
+import {
+  CAPTAIN_TITLES,
+  getCaptainTitleById,
+} from "@/app/data/captainTitles";
 import { MISSION_BADGES, getMissionBadgeCopy } from "@/app/data/missionBadges";
 import { getCaptainRank } from "@/app/data/playerProgress";
+import {
+  SHIP_SYSTEMS,
+  formatShipSystemRequirement,
+  getUnlockedShipSystems,
+  isShipSystemUnlocked,
+} from "@/app/data/shipSystems";
 import { SPACE_OBJECTS } from "@/app/data/spaceObjects";
 import { TOURS, getTourById, getTourCopy, getTourStopCopy } from "@/app/data/tours";
 import type {
@@ -53,7 +70,9 @@ import type {
   FlightMissionId,
   HudMode,
   Language,
+  CaptainTitleId,
   Mission,
+  MissionCompleteSummary,
   MissionStep,
   MissionStatus,
   PlayerProgress,
@@ -103,6 +122,7 @@ type HudProps = {
   archivePanelOpen: boolean;
   completedTourStopIds: string[];
   currentArchiveWaypointIndex: number;
+  missionCompleteSummary: MissionCompleteSummary | null;
   playerProgress: PlayerProgress;
   selectedArchiveMissionId: ArchiveMissionId | null;
   tourMode: TourMode;
@@ -128,6 +148,7 @@ type HudProps = {
   onNextArchiveWaypoint: () => void;
   onNextTourStop: () => void;
   onOpenArchivesPanel: () => void;
+  onOpenCollectionPanel: () => void;
   onOpenViewPanel: () => void;
   onPreviousArchiveWaypoint: () => void;
   onRelatedItem: (item: string) => void;
@@ -140,6 +161,7 @@ type HudProps = {
   onStartFlightMission: (missionId: FlightMissionId) => void;
   onStartArchiveExpedition: (missionId?: ArchiveMissionId) => void;
   onStartRecommendedMission: () => void;
+  onStartNextRecommendedFlightMission: () => void;
   onStartTour: (tourId: TourId) => void;
   onStartTourRecommendedMission: () => void;
   onToast: (message: string) => void;
@@ -147,6 +169,9 @@ type HudProps = {
   onToggleFullscreen: () => void;
   onToggleHudMode: () => void;
   onViewArchiveRoute: (missionId: ArchiveMissionId) => void;
+  onContinueFreeFlight: () => void;
+  onResetPlayerProgress: () => void;
+  onSelectCaptainTitle: (titleId: CaptainTitleId) => void;
   setActivePanel: (panel: ActivePanel) => void;
   setControlSensitivity: (sensitivity: ControlSensitivity) => void;
   setDetailOpen: (open: boolean) => void;
@@ -212,6 +237,27 @@ const COPY = {
     startRecommendedFlightMission: "Start Recommended Flight Mission",
     cancelFlightMission: "Cancel Mission",
     completedFlightMissions: "Completed Flight Missions",
+    expeditionCareer: "Expedition Career",
+    currentChapter: "Current Chapter",
+    chapterProgress: "Chapter Progress",
+    recommendedNext: "Recommended Next",
+    lockedChapter: "Locked Chapter",
+    allCoreFlightMissionsComplete: "All core flight missions complete",
+    startNextMission: "Start Next Mission",
+    missionCompletePanelTitle: "Mission Complete",
+    openCollection: "Open Collection",
+    continueFreeFlight: "Continue Free Flight",
+    playerProfile: "Player Profile",
+    savedLocally: "Saved locally",
+    notSavedYet: "Not saved yet",
+    lastSaved: "Last saved",
+    resetProgress: "Reset Progress",
+    shipSystems: "Ship Systems",
+    unlockedShipSystems: "Unlocked Ship Systems",
+    captainTitles: "Captain Titles",
+    selectedTitle: "Selected Title",
+    selectTitle: "Select Title",
+    careerProgress: "Career Progress",
     estimatedDuration: "Duration",
     objectiveCount: "Objectives",
     rewardSummary: "Reward",
@@ -408,6 +454,27 @@ const COPY = {
     startRecommendedFlightMission: "启动推荐飞行任务",
     cancelFlightMission: "取消任务",
     completedFlightMissions: "已完成飞行任务",
+    expeditionCareer: "远征生涯",
+    currentChapter: "当前章节",
+    chapterProgress: "章节进度",
+    recommendedNext: "推荐下一步",
+    lockedChapter: "未解锁章节",
+    allCoreFlightMissionsComplete: "核心飞行任务已全部完成",
+    startNextMission: "启动下一任务",
+    missionCompletePanelTitle: "飞行任务完成",
+    openCollection: "打开收藏",
+    continueFreeFlight: "继续自由飞行",
+    playerProfile: "玩家档案",
+    savedLocally: "本地已保存",
+    notSavedYet: "尚未保存",
+    lastSaved: "上次保存",
+    resetProgress: "重置进度",
+    shipSystems: "飞船系统",
+    unlockedShipSystems: "已解锁飞船系统",
+    captainTitles: "舰长称号",
+    selectedTitle: "当前称号",
+    selectTitle: "选择称号",
+    careerProgress: "生涯进度",
     estimatedDuration: "耗时",
     objectiveCount: "目标步骤",
     rewardSummary: "奖励",
@@ -635,6 +702,7 @@ export default function Hud({
   archiveExpeditionMode,
   completedTourStopIds,
   currentArchiveWaypointIndex,
+  missionCompleteSummary,
   playerProgress,
   selectedArchiveMissionId,
   tourMode,
@@ -660,6 +728,7 @@ export default function Hud({
   onNextArchiveWaypoint,
   onNextTourStop,
   onOpenArchivesPanel,
+  onOpenCollectionPanel,
   onOpenViewPanel,
   onPreviousArchiveWaypoint,
   onRelatedItem,
@@ -670,6 +739,7 @@ export default function Hud({
   onShareView,
   onStartArchiveExpedition,
   onStartFlightMission,
+  onStartNextRecommendedFlightMission,
   onStartMission,
   onStartRecommendedMission,
   onStartTour,
@@ -679,6 +749,9 @@ export default function Hud({
   onToggleFullscreen,
   onToggleHudMode,
   onViewArchiveRoute,
+  onContinueFreeFlight,
+  onResetPlayerProgress,
+  onSelectCaptainTitle,
   setActivePanel,
   setControlSensitivity,
   setDetailOpen,
@@ -860,12 +933,17 @@ export default function Hud({
             onRestartTour={onRestartTour}
             onSelectArchiveWaypoint={onSelectArchiveWaypoint}
             onStartFlightMission={onStartFlightMission}
+            onStartNextRecommendedFlightMission={
+              onStartNextRecommendedFlightMission
+            }
             onStartMission={onStartMission}
             onStartArchiveExpedition={onStartArchiveExpedition}
             onStartTour={onStartTour}
             onStartTourRecommendedMission={onStartTourRecommendedMission}
             onSelectTarget={setSelectedTarget}
             onViewArchiveRoute={onViewArchiveRoute}
+            onResetPlayerProgress={onResetPlayerProgress}
+            onSelectCaptainTitle={onSelectCaptainTitle}
             setActivePanel={setActivePanel}
             setCollapsed={setLeftPanelCollapsed}
             setControlSensitivity={setControlSensitivity}
@@ -1011,6 +1089,17 @@ export default function Hud({
             viewMode={viewMode}
           />
         )
+      ) : null}
+
+      {missionCompleteSummary ? (
+        <MissionCompletePanel
+          copy={copy}
+          language={language}
+          summary={missionCompleteSummary}
+          onContinueFreeFlight={onContinueFreeFlight}
+          onOpenCollection={onOpenCollectionPanel}
+          onStartNextMission={onStartNextRecommendedFlightMission}
+        />
       ) : null}
 
       <Toast message={shareToast} />
@@ -1500,10 +1589,13 @@ function LeftPanel({
   onSelectTarget,
   onStartArchiveExpedition,
   onStartFlightMission,
+  onStartNextRecommendedFlightMission,
   onStartMission,
   onStartTour,
   onStartTourRecommendedMission,
   onViewArchiveRoute,
+  onResetPlayerProgress,
+  onSelectCaptainTitle,
   setActivePanel,
   setCollapsed,
   setControlSensitivity,
@@ -1556,10 +1648,13 @@ function LeftPanel({
   onSelectTarget: (target: SelectedTarget) => void;
   onStartArchiveExpedition: (missionId?: ArchiveMissionId) => void;
   onStartFlightMission: (missionId: FlightMissionId) => void;
+  onStartNextRecommendedFlightMission: () => void;
   onStartMission: (mission: Mission) => void;
   onStartTour: (tourId: TourId) => void;
   onStartTourRecommendedMission: () => void;
   onViewArchiveRoute: (missionId: ArchiveMissionId) => void;
+  onResetPlayerProgress: () => void;
+  onSelectCaptainTitle: (titleId: CaptainTitleId) => void;
   setActivePanel: (panel: ActivePanel) => void;
   setCollapsed: (collapsed: boolean) => void;
   setControlSensitivity: (sensitivity: ControlSensitivity) => void;
@@ -1674,6 +1769,9 @@ function LeftPanel({
             onCancelFlightMission={onCancelFlightMission}
             onCompleteMission={onCompleteMission}
             onStartFlightMission={onStartFlightMission}
+            onStartNextRecommendedFlightMission={
+              onStartNextRecommendedFlightMission
+            }
             onStartMission={onStartMission}
             tourStop={activeTour?.stops[activeTourStopIndex] ?? null}
           />
@@ -1716,7 +1814,10 @@ function LeftPanel({
             copy={copy}
             language={language}
             playerProgress={playerProgress}
+            onResetPlayerProgress={onResetPlayerProgress}
+            onSelectCaptainTitle={onSelectCaptainTitle}
             onSelectTarget={onSelectTarget}
+            onStartFlightMission={onStartFlightMission}
           />
         ) : (
           <ViewTab
@@ -1886,6 +1987,7 @@ function MissionsTab({
   onCancelFlightMission,
   onCompleteMission,
   onStartFlightMission,
+  onStartNextRecommendedFlightMission,
   onStartMission,
 }: {
   activeFlightMission: ActiveFlightMissionState | null;
@@ -1903,6 +2005,7 @@ function MissionsTab({
   onCancelFlightMission: () => void;
   onCompleteMission: (missionId: string) => void;
   onStartFlightMission: (missionId: FlightMissionId) => void;
+  onStartNextRecommendedFlightMission: () => void;
   onStartMission: (mission: Mission) => void;
 }) {
   const missions = getMissionsForTarget(selectedTarget);
@@ -1943,6 +2046,16 @@ function MissionsTab({
         completedCount={completedCount}
         copy={copy}
         totalCount={totalCount}
+      />
+
+      <CareerProgressCard
+        copy={copy}
+        language={language}
+        playerProgress={playerProgress}
+        selectedTarget={selectedTarget}
+        onStartNextRecommendedFlightMission={
+          onStartNextRecommendedFlightMission
+        }
       />
 
       {tourStop ? (
@@ -2122,6 +2235,167 @@ function MissionsTab({
       />
     </div>
   );
+}
+
+function CareerProgressCard({
+  copy,
+  language,
+  playerProgress,
+  selectedTarget,
+  onStartNextRecommendedFlightMission,
+}: {
+  copy: (typeof COPY)[Language];
+  language: Language;
+  playerProgress: PlayerProgress;
+  selectedTarget: SelectedTarget;
+  onStartNextRecommendedFlightMission: () => void;
+}) {
+  const currentChapter = getCurrentCareerChapter(playerProgress);
+  const currentProgress = getCareerChapterProgress(
+    currentChapter,
+    playerProgress,
+  );
+  const recommendedMission = getRecommendedNextFlightMission(
+    playerProgress,
+    selectedTarget,
+  );
+
+  return (
+    <section className="grid gap-3 border border-emerald-300/20 bg-emerald-950/10 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-100">
+            {copy.expeditionCareer}
+          </p>
+          <h3 className="mt-2 text-sm font-semibold text-slate-100">
+            {currentChapter.title[language]}
+          </h3>
+          <p className="mt-1 text-xs leading-5 text-slate-400">
+            {currentChapter.subtitle[language]}
+          </p>
+        </div>
+        <span className="border border-emerald-300/25 bg-emerald-950/20 px-2 py-1 text-[8px] uppercase tracking-[0.14em] text-emerald-100">
+          {currentProgress.completedCount}/{currentProgress.totalCount}
+        </span>
+      </div>
+      <div className="h-1 border border-white/10 bg-white/[0.03]">
+        <div
+          className="h-full bg-emerald-200 shadow-[0_0_14px_rgba(110,231,183,0.35)]"
+          style={{
+            width: `${
+              currentProgress.totalCount
+                ? (currentProgress.completedCount / currentProgress.totalCount) *
+                  100
+                : 0
+            }%`,
+          }}
+        />
+      </div>
+      <p className="text-xs leading-5 text-slate-400">
+        {currentChapter.description[language]}
+      </p>
+      <div className="grid gap-2">
+        {CAREER_CHAPTERS.map((chapter) => {
+          const chapterProgress = getCareerChapterProgress(
+            chapter,
+            playerProgress,
+          );
+          const unlocked = isCareerChapterUnlocked(chapter, playerProgress);
+
+          return (
+            <div
+              key={chapter.id}
+              className={[
+                "border px-3 py-2",
+                chapter.id === currentChapter.id
+                  ? "border-emerald-300/30 bg-emerald-950/14"
+                  : unlocked
+                    ? "border-white/10 bg-white/[0.03]"
+                    : "border-white/10 bg-white/[0.02] opacity-60",
+              ].join(" ")}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.13em] text-slate-200">
+                  {chapter.title[language]}
+                </span>
+                <span className="text-[8px] uppercase tracking-[0.14em] text-slate-500">
+                  {chapterProgress.complete
+                    ? copy.completed
+                    : unlocked
+                      ? `${chapterProgress.completedCount}/${chapterProgress.totalCount}`
+                      : copy.lockedChapter}
+                </span>
+              </div>
+              {!unlocked ? (
+                <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                  {formatCareerRequirement(chapter, language)}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <div className="border border-white/10 bg-black/20 p-3">
+        <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          {copy.recommendedNext}
+        </p>
+        {recommendedMission ? (
+          <>
+            <p className="mt-2 text-sm font-semibold text-cyan-100">
+              {recommendedMission.title[language]}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+              {recommendedMission.subtitle[language]}
+            </p>
+            <button
+              type="button"
+              onClick={onStartNextRecommendedFlightMission}
+              className="mt-3 border border-cyan-300/35 bg-cyan-950/20 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-100 transition hover:border-cyan-200 active:scale-[0.98]"
+            >
+              {copy.startNextMission}
+            </button>
+          </>
+        ) : (
+          <p className="mt-2 text-xs leading-5 text-emerald-100/75">
+            {copy.allCoreFlightMissionsComplete}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function formatCareerRequirement(
+  chapter: (typeof CAREER_CHAPTERS)[number],
+  language: Language,
+) {
+  const requirement = chapter.unlockRequirement;
+  if (!requirement) return "";
+
+  const parts: string[] = [];
+  if (requirement.minXp) parts.push(`${requirement.minXp} XP`);
+  if (requirement.completedMissionIds?.length) {
+    const missionNames = requirement.completedMissionIds
+      .map((missionId) => getFlightMissionById(missionId)?.title[language])
+      .filter(Boolean);
+    parts.push(
+      language === "zh"
+        ? `完成 ${missionNames.join("、")}`
+        : `Complete ${missionNames.join(", ")}`,
+    );
+  }
+  if (requirement.scannedTargets?.length) {
+    const targetNames = requirement.scannedTargets.map(
+      (target) => SPACE_OBJECTS[target].name[language],
+    );
+    parts.push(
+      language === "zh"
+        ? `扫描 ${targetNames.join("、")}`
+        : `Scan ${targetNames.join(", ")}`,
+    );
+  }
+
+  return parts.join(language === "zh" ? "；" : "; ");
 }
 
 function MissionProgress({
@@ -3028,26 +3302,162 @@ function ArchivesTab({
   );
 }
 
+function MissionCompletePanel({
+  copy,
+  language,
+  summary,
+  onContinueFreeFlight,
+  onOpenCollection,
+  onStartNextMission,
+}: {
+  copy: (typeof COPY)[Language];
+  language: Language;
+  summary: MissionCompleteSummary;
+  onContinueFreeFlight: () => void;
+  onOpenCollection: () => void;
+  onStartNextMission: () => void;
+}) {
+  const mission = getFlightMissionById(summary.missionId);
+  const nextMission = summary.nextMissionId
+    ? getFlightMissionById(summary.nextMissionId)
+    : null;
+  const discoveryLabels = summary.discoveryCardIds
+    .map((cardId) => {
+      const card = SCAN_DISCOVERY_CARDS.find((item) => item.id === cardId);
+      return card ? getScanDiscoveryCardCopy(card, language).title : null;
+    })
+    .filter(Boolean);
+  const badgeLabels = summary.badgeIds
+    .map((badgeId) => {
+      const badge = MISSION_BADGES.find((item) => item.id === badgeId);
+      return badge ? getMissionBadgeCopy(badge, language).title : null;
+    })
+    .filter(Boolean);
+  const titleLabels = summary.captainTitleIds
+    .map((titleId) => getCaptainTitleById(titleId)?.label[language] ?? null)
+    .filter(Boolean);
+
+  return (
+    <section className="pointer-events-auto absolute right-24 top-24 z-40 w-[min(90vw,390px)] border border-emerald-300/28 bg-black/76 p-4 shadow-[0_0_44px_rgba(16,185,129,0.16)] backdrop-blur-2xl">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-100">
+        {copy.missionCompletePanelTitle}
+      </p>
+      <h2 className="mt-3 text-lg font-semibold text-white">
+        {mission?.title[language] ?? copy.flightMissionCompleted}
+      </h2>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <ProgressMetric label={copy.flightXp} value={`+${summary.xp}`} />
+        <ProgressMetric
+          label={copy.researchCredits}
+          value={`+${summary.researchCredits}`}
+        />
+      </div>
+      <div className="mt-4 grid gap-2 text-xs leading-5 text-slate-300">
+        {discoveryLabels.length ? (
+          <RewardLine
+            label={copy.discoveries}
+            value={discoveryLabels.join(language === "zh" ? "、" : ", ")}
+          />
+        ) : null}
+        {badgeLabels.length ? (
+          <RewardLine
+            label={copy.badges}
+            value={badgeLabels.join(language === "zh" ? "、" : ", ")}
+          />
+        ) : null}
+        {titleLabels.length ? (
+          <RewardLine
+            label={copy.captainTitles}
+            value={titleLabels.join(language === "zh" ? "、" : ", ")}
+          />
+        ) : null}
+        {nextMission ? (
+          <RewardLine
+            label={copy.recommendedNext}
+            value={nextMission.title[language]}
+          />
+        ) : (
+          <RewardLine
+            label={copy.careerProgress}
+            value={copy.allCoreFlightMissionsComplete}
+          />
+        )}
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <button
+          type="button"
+          onClick={onStartNextMission}
+          disabled={!nextMission}
+          className="border border-cyan-300/35 bg-cyan-950/22 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-cyan-100 transition hover:border-cyan-200 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.02] disabled:text-slate-600"
+        >
+          {copy.startNextMission}
+        </button>
+        <button
+          type="button"
+          onClick={onOpenCollection}
+          className="border border-emerald-300/35 bg-emerald-950/18 px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-emerald-100 transition hover:border-emerald-200"
+        >
+          {copy.openCollection}
+        </button>
+        <button
+          type="button"
+          onClick={onContinueFreeFlight}
+          className="border border-white/10 bg-white/[0.03] px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-300 transition hover:border-slate-300/35 hover:text-slate-100"
+        >
+          {copy.continueFreeFlight}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function RewardLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-white/10 bg-white/[0.03] p-2">
+      <span className="block text-[8px] uppercase tracking-[0.16em] text-slate-500">
+        {label}
+      </span>
+      <span className="mt-1 block text-xs text-slate-200">{value}</span>
+    </div>
+  );
+}
+
 function CollectionTab({
   copy,
   language,
   playerProgress,
+  onResetPlayerProgress,
+  onSelectCaptainTitle,
   onSelectTarget,
+  onStartFlightMission,
 }: {
   copy: (typeof COPY)[Language];
   language: Language;
   playerProgress: PlayerProgress;
+  onResetPlayerProgress: () => void;
+  onSelectCaptainTitle: (titleId: CaptainTitleId) => void;
   onSelectTarget: (target: SelectedTarget) => void;
+  onStartFlightMission: (missionId: FlightMissionId) => void;
 }) {
   const scannedCount = playerProgress.scannedTargetIds.length;
   const unlockedBadgeCount = playerProgress.unlockedBadgeIds.length;
   const captainRank = getCaptainRank(playerProgress.flightXp, language);
+  const unlockedShipSystems = getUnlockedShipSystems(playerProgress);
+  const selectedCaptainTitle = playerProgress.selectedCaptainTitle
+    ? getCaptainTitleById(playerProgress.selectedCaptainTitle)
+    : null;
+  const recommendedMission = getRecommendedNextFlightMission(playerProgress);
+  const lastSavedLabel = playerProgress.lastSavedAt
+    ? new Date(playerProgress.lastSavedAt).toLocaleString(
+        language === "zh" ? "zh-CN" : "en-US",
+      )
+    : copy.notSavedYet;
 
   return (
     <div className="grid gap-3">
       <section className="border border-cyan-300/25 bg-cyan-950/14 p-3">
         <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
-          {copy.collectionTitle}
+          {copy.playerProfile}
         </p>
         <p className="mt-2 text-xs leading-5 text-slate-400">
           {copy.collectionSubtitle}
@@ -3075,16 +3485,145 @@ function CollectionTab({
             label={copy.completedFlightMissions}
             value={`${playerProgress.completedFlightMissionIds.length}/${FLIGHT_MISSIONS.length}`}
           />
+          <ProgressMetric
+            label={copy.unlockedShipSystems}
+            value={`${unlockedShipSystems.length}/${SHIP_SYSTEMS.length}`}
+          />
+          <ProgressMetric
+            label={copy.selectedTitle}
+            value={
+              selectedCaptainTitle?.label[language] ??
+              (language === "zh" ? "未选择" : "None")
+            }
+          />
+        </div>
+        <div className="mt-3 border border-white/10 bg-black/20 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[9px] uppercase tracking-[0.16em] text-emerald-100/80">
+                {copy.savedLocally}
+              </p>
+              <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                {copy.lastSaved}: {lastSavedLabel}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onResetPlayerProgress}
+              className="border border-red-300/25 bg-red-950/10 px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-red-100 transition hover:border-red-200 active:scale-[0.98]"
+            >
+              {copy.resetProgress}
+            </button>
+          </div>
         </div>
       </section>
 
       <section className="border border-white/10 bg-white/[0.03] p-3">
         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-          {copy.progressHints}
+          {copy.recommendedNext}
         </p>
-        <p className="mt-2 text-xs leading-5 text-slate-300">
-          {copy.collectionHint}
+        {recommendedMission ? (
+          <>
+            <p className="mt-2 text-sm font-semibold text-cyan-100">
+              {recommendedMission.title[language]}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+              {recommendedMission.description[language]}
+            </p>
+            <button
+              type="button"
+              onClick={() => onStartFlightMission(recommendedMission.id)}
+              className="mt-3 border border-cyan-300/35 bg-cyan-950/20 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-100 transition hover:border-cyan-200 active:scale-[0.98]"
+            >
+              {copy.startNextMission}
+            </button>
+          </>
+        ) : (
+          <p className="mt-2 text-xs leading-5 text-emerald-100/75">
+            {copy.allCoreFlightMissionsComplete}
+          </p>
+        )}
+      </section>
+
+      <section className="grid gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          {copy.captainTitles}
         </p>
+        {CAPTAIN_TITLES.map((title) => {
+          const unlocked = playerProgress.captainTitles.includes(title.id);
+          const selected = playerProgress.selectedCaptainTitle === title.id;
+
+          return (
+            <button
+              key={title.id}
+              type="button"
+              disabled={!unlocked}
+              onClick={() => onSelectCaptainTitle(title.id)}
+              className={[
+                "border p-3 text-left transition",
+                selected
+                  ? "border-cyan-300/45 bg-cyan-950/20"
+                  : unlocked
+                    ? "border-emerald-300/20 bg-emerald-950/10 hover:border-emerald-200/45"
+                    : "cursor-not-allowed border-white/10 bg-white/[0.02] opacity-55",
+              ].join(" ")}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-100">
+                  {title.label[language]}
+                </p>
+                <span className="text-[8px] uppercase tracking-[0.14em] text-slate-500">
+                  {selected
+                    ? copy.selectedTitle
+                    : unlocked
+                      ? copy.selectTitle
+                      : copy.locked}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                {title.description[language]}
+              </p>
+            </button>
+          );
+        })}
+      </section>
+
+      <section className="grid gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          {copy.shipSystems}
+        </p>
+        {SHIP_SYSTEMS.map((system) => {
+          const unlocked = isShipSystemUnlocked(system, playerProgress);
+
+          return (
+            <div
+              key={system.id}
+              className={[
+                "border p-3",
+                unlocked
+                  ? "border-cyan-300/22 bg-cyan-950/12"
+                  : "border-white/10 bg-white/[0.02] opacity-60",
+              ].join(" ")}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-100">
+                  {system.title[language]}
+                </p>
+                <span className="text-[8px] uppercase tracking-[0.14em] text-slate-500">
+                  {unlocked ? copy.unlocked : copy.locked}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-cyan-100/65">
+                {system.subtitle[language]}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                {unlocked
+                  ? system.description[language]
+                  : formatShipSystemRequirement(system, language)}
+              </p>
+            </div>
+          );
+        })}
       </section>
 
       <section className="grid gap-2">
@@ -4460,6 +4999,7 @@ function formatLogEvent(type: ExplorationLogEntry["type"], language: Language) {
     cockpit_entered: "COCKPIT ENTERED",
     cockpit_exited: "COCKPIT EXITED",
     badge_unlocked: "BADGE UNLOCKED",
+    captain_title_unlocked: "CAPTAIN TITLE UNLOCKED",
     discovery_unlocked: "DISCOVERY UNLOCKED",
     flight_objective_completed: "FLIGHT OBJECTIVE COMPLETE",
     flight_objective_started: "FLIGHT OBJECTIVE STARTED",
@@ -4490,6 +5030,7 @@ function formatLogEvent(type: ExplorationLogEntry["type"], language: Language) {
     cockpit_entered: "驾驶舱进入",
     cockpit_exited: "驾驶舱退出",
     badge_unlocked: "徽章解锁",
+    captain_title_unlocked: "称号解锁",
     discovery_unlocked: "发现解锁",
     flight_objective_completed: "飞行目标完成",
     flight_objective_started: "飞行目标启动",
